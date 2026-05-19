@@ -38,6 +38,16 @@ Hour 2-7 is complete locally:
 - `POST /api/messages` validates and saves new public messages.
 - New posts get a stable per-desk anonymous label such as `Desk-47 Lantern`.
 
+Hour 7-12 is complete locally:
+
+- A fresh browser sees onboarding before the Desk 47 archive.
+- Demo personas are available inside onboarding: Alex and Jamie.
+- Manual course selection is available with the static course list.
+- The selected study profile is saved in browser `localStorage` under `mystudyfriend_profile`.
+- Returning in the same browser skips onboarding.
+- The archive shows a profile banner and a `Switch profile` control.
+- Supabase Auth is intentionally not built yet.
+
 Still not complete:
 
 - Vercel deployment has not been verified from this machine.
@@ -122,7 +132,10 @@ Then check:
 
 - `/api/health` reports `desk47.source: "supabase"`.
 - `/api/health` reports a positive `desk47Messages.count`.
-- `/desk/47` shows seeded messages.
+- Clearing `localStorage` and opening `/desk/47` shows onboarding.
+- Selecting Alex unlocks the archive and shows `Personalised for Alex · COMP2521 · MATH1081`.
+- Refreshing `/desk/47` skips onboarding in the same browser.
+- Switching to Jamie updates the banner to `Personalised for Jamie · FINS1613 · ECON1101`.
 - `/desk/47` does not show a QR panel or raw localhost/deployed URL.
 - Submitting a safe message returns HTTP 201 from `POST /api/messages`.
 - Refreshing `/desk/47` shows the submitted message.
@@ -132,6 +145,7 @@ Then check:
 ## Main Files
 
 - `app/desk/[locationId]/page.tsx` renders the desk archive destination page.
+- `app/desk/[locationId]/desk-archive-client.tsx` checks the local study profile, shows onboarding, and unlocks the archive.
 - `app/desk/[locationId]/message-composer.tsx` handles the browser-side message form and local demo user id.
 - `app/api/messages/route.ts` saves new messages to Supabase and creates author labels.
 - `app/api/health/route.ts` reports location/message health.
@@ -147,6 +161,7 @@ Then check:
 
 - `docs/hour-0-2-debugging-handoff.md`
 - `docs/hour-2-7-debugging-handoff.md`
+- `docs/hour-7-12-debugging-handoff.md`
 - `docs/detailed-execution-guide.md`
 
 Read the relevant handoff before continuing to the next checkpoint.
