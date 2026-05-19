@@ -25,5 +25,5 @@ export default async function ScanPage({ searchParams }: ScanPageProps) {
     redirect("/");
   }
 
-  redirect(`/desk/${result.location.id}`);
+  redirect(`/desk/${result.location.id}?token=${encodeURIComponent(token)}`);
 }
