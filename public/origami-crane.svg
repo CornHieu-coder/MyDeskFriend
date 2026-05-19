@@ -1,0 +1,12 @@
+<svg width="160" height="120" viewBox="0 0 160 120" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title">
+  <title id="title">Origami crane</title>
+  <path d="M8 70L43 76L29 43L8 70Z" fill="#FFF7F1"/>
+  <path d="M43 76L54 108L66 104L29 43L43 76Z" fill="#FFFDF9"/>
+  <path d="M29 43L72 51L99 84L66 104L54 108L43 76L8 70L29 43Z" fill="#FFE3D3"/>
+  <path d="M66 104L99 84L150 91L100 107L66 104Z" fill="#FFC2A8"/>
+  <path d="M99 84L120 18L115 75L150 91L99 84Z" fill="#FFC7B0"/>
+  <path d="M72 51L91 67L99 84L66 104L72 51Z" fill="#FFF7F1"/>
+  <path d="M72 51L57 83L54 108L43 76L72 51Z" fill="#FFFDF9"/>
+  <path d="M29 43L18 55L45 38L29 43Z" fill="#FFC2A8"/>
+  <path d="M8 70L43 76L29 43M8 70L29 43M8 70L54 108M29 43L72 51L99 84M29 43L54 108M54 108L66 104M54 108L72 51M66 104L99 84M66 104L100 107L150 91M99 84L120 18L115 75L150 91M99 84L150 91M72 51L57 83M72 51L91 67M18 55L45 38L29 43" stroke="#303030" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
