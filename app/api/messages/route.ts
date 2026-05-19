@@ -1,9 +1,17 @@
 import { NextResponse } from "next/server";
 import { getDisplayAuthorLabel } from "@/lib/author-label";
+import { embedText } from "@/lib/openai";
+import { enrichMessageBody } from "@/lib/message-enrichment";
 import { createAuthorLabel } from "@/lib/pseudonym";
-import { createServerSupabaseClient } from "@/lib/supabase/server";
+import {
+  createServerSupabaseAdminClient,
+  createServerSupabaseClient,
+} from "@/lib/supabase/server";
+import { toVectorLiteral } from "@/lib/vector";
 
 const maxMessageLength = 1000;
+const messageResponseSelect =
+  "id, location_id, body, pseudonym, author_label, tags, course_tags, upvotes, term_week_when_written, created_at";
 
 export async function POST(request: Request) {
   let payload: unknown;
@@ -101,6 +109,7 @@ export async function POST(request: Request) {
     );
   }
 
+  const enrichment = enrichMessageBody(body);
   const insertWithAuthorLabel = await supabase
     .from("messages")
     .insert({
@@ -108,11 +117,12 @@ export async function POST(request: Request) {
       author_label: authorLabel,
       pseudonym: authorLabel,
       body,
-      tags: [],
-      course_tags: [],
+      tags: enrichment.tags,
+      course_tags: enrichment.courseTags,
+      term_week_when_written: enrichment.termWeekWhenWritten,
       status: "public",
     })
-    .select("*")
+    .select(messageResponseSelect)
     .single();
 
   let data = insertWithAuthorLabel.data;
@@ -125,11 +135,12 @@ export async function POST(request: Request) {
         location_id: locationId,
         pseudonym: authorLabel,
         body,
-        tags: [],
-        course_tags: [],
+        tags: enrichment.tags,
+        course_tags: enrichment.courseTags,
+        term_week_when_written: enrichment.termWeekWhenWritten,
         status: "public",
       })
-      .select("*")
+      .select(messageResponseSelect)
       .single();
 
     data = fallbackInsert.data;
@@ -138,6 +149,13 @@ export async function POST(request: Request) {
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  if (data?.id) {
+    await embedNewMessageIfConfigured({
+      body,
+      messageId: data.id,
+    });
   }
 
   const displayAuthorLabel = getDisplayAuthorLabel({
@@ -158,6 +176,11 @@ export async function POST(request: Request) {
             ? data.pseudonym
             : responseAuthorLabel,
         author_label: responseAuthorLabel,
+        tags: data?.tags ?? enrichment.tags,
+        course_tags: data?.course_tags ?? enrichment.courseTags,
+        upvotes: data?.upvotes ?? 0,
+        term_week_when_written:
+          data?.term_week_when_written ?? enrichment.termWeekWhenWritten,
         created_at: data?.created_at,
       },
     },
@@ -191,4 +214,69 @@ function isMissingAuthorLabelColumn(message?: string) {
     message?.toLowerCase().includes("author_label") &&
       message.toLowerCase().includes("column"),
   );
+}
+
+async function embedNewMessageIfConfigured({
+  body,
+  messageId,
+}: {
+  body: string;
+  messageId: string;
+}) {
+  if (!process.env.OPENAI_API_KEY || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    return;
+  }
+
+  const supabaseAdmin = createServerSupabaseAdminClient();
+
+  if (!supabaseAdmin) {
+    return;
+  }
+
+  try {
+    const embedding = await embedText(body);
+    const { error } = await supabaseAdmin
+      .from("messages")
+      .update({ embedding: toVectorLiteral(embedding) })
+      .eq("id", messageId);
+
+    if (error) {
+      console.warn("New message embedding was skipped.", {
+        reason: getSafeEmbeddingWarning(error.message),
+      });
+    }
+  } catch (error) {
+    console.warn("New message embedding was skipped.", {
+      reason:
+        error instanceof Error
+          ? getSafeEmbeddingWarning(error.message)
+          : "Unknown embedding failure.",
+    });
+  }
+}
+
+function getSafeEmbeddingWarning(message: string) {
+  const normalizedMessage = message.toLowerCase();
+
+  if (normalizedMessage.includes("quota") || normalizedMessage.includes("billing")) {
+    return "OpenAI quota or billing is unavailable.";
+  }
+
+  if (
+    normalizedMessage.includes("api key") ||
+    normalizedMessage.includes("401") ||
+    normalizedMessage.includes("403")
+  ) {
+    return "OpenAI API key was rejected.";
+  }
+
+  if (
+    normalizedMessage.includes("embedding") ||
+    normalizedMessage.includes("schema cache") ||
+    normalizedMessage.includes("column")
+  ) {
+    return "Embedding column is not ready.";
+  }
+
+  return "Embedding request failed.";
 }

@@ -84,6 +84,7 @@ export type Database = {
           status: "public" | "pending" | "hidden";
           term_week_when_written: number | null;
           created_at: string;
+          embedding: string | null;
         };
         Insert: {
           id?: string;
@@ -99,6 +100,7 @@ export type Database = {
           status?: "public" | "pending" | "hidden";
           term_week_when_written?: number | null;
           created_at?: string;
+          embedding?: string | null;
         };
         Update: {
           id?: string;
@@ -114,12 +116,36 @@ export type Database = {
           status?: "public" | "pending" | "hidden";
           term_week_when_written?: number | null;
           created_at?: string;
+          embedding?: string | null;
         };
         Relationships: [];
       };
     };
     Views: Record<string, never>;
-    Functions: Record<string, never>;
+    Functions: {
+      match_messages_for_location: {
+        Args: {
+          query_embedding: string;
+          target_location_id: number;
+          match_count: number;
+        };
+        Returns: Array<{
+          id: string;
+          location_id: number;
+          author_id: string | null;
+          author_label: string;
+          pseudonym: string;
+          body: string;
+          tags: string[];
+          course_tags: string[];
+          upvotes: number;
+          status: "public" | "pending" | "hidden";
+          term_week_when_written: number | null;
+          created_at: string;
+          semantic_similarity: number;
+        }>;
+      };
+    };
     Enums: Record<string, never>;
     CompositeTypes: Record<string, never>;
   };

@@ -20,6 +20,8 @@ export type DemoMessage = {
   status: "public" | "pending" | "hidden";
   term_week_when_written: number | null;
   created_at: string;
+  embedding?: string | null;
+  semantic_similarity?: number | null;
 };
 
 export const demoLocations: DemoLocation[] = [
@@ -426,6 +428,62 @@ export const demoMessages: DemoMessage[] = [
     status: "public",
     term_week_when_written: 8,
     created_at: "2026-05-08T12:45:00.000Z",
+  },
+  {
+    id: "10000000-0000-4000-8000-000000000029",
+    location_id: 47,
+    author_id: null,
+    author_label: "Desk-47 Theorem",
+    pseudonym: "Desk-47 Theorem",
+    body: "MATH1081 graph proofs: name the vertices, state what edge means, then prove the condition one direction at a time.",
+    tags: ["exam advice", "course advice"],
+    course_tags: ["MATH1081"],
+    upvotes: 17,
+    status: "public",
+    term_week_when_written: 10,
+    created_at: "2026-05-18T06:30:00.000Z",
+  },
+  {
+    id: "10000000-0000-4000-8000-000000000030",
+    location_id: 47,
+    author_id: null,
+    author_label: "Desk-47 Set",
+    pseudonym: "Desk-47 Set",
+    body: "For MATH1081 relations, write a tiny set example before the formal proof. It catches symmetry and transitivity mistakes fast.",
+    tags: ["study tip", "course advice"],
+    course_tags: ["MATH1081"],
+    upvotes: 14,
+    status: "public",
+    term_week_when_written: 9,
+    created_at: "2026-05-17T19:10:00.000Z",
+  },
+  {
+    id: "10000000-0000-4000-8000-000000000031",
+    location_id: 47,
+    author_id: null,
+    author_label: "Desk-47 Demand",
+    pseudonym: "Desk-47 Demand",
+    body: "ECON1101 elasticity questions get easier if you write what is changing first: price, quantity, income, or substitutes.",
+    tags: ["exam advice", "course advice"],
+    course_tags: ["ECON1101"],
+    upvotes: 16,
+    status: "public",
+    term_week_when_written: 10,
+    created_at: "2026-05-18T04:40:00.000Z",
+  },
+  {
+    id: "10000000-0000-4000-8000-000000000032",
+    location_id: 47,
+    author_id: null,
+    author_label: "Desk-47 Curve",
+    pseudonym: "Desk-47 Curve",
+    body: "ECON1101 graphs: say whether the curve shifts or you move along it before touching the diagram.",
+    tags: ["study tip", "course advice"],
+    course_tags: ["ECON1101"],
+    upvotes: 15,
+    status: "public",
+    term_week_when_written: 9,
+    created_at: "2026-05-16T18:35:00.000Z",
   },
   {
     id: "10000000-0000-4000-8000-000000000025",

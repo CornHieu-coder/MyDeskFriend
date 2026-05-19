@@ -1,4 +1,6 @@
 create extension if not exists pgcrypto;
+create schema if not exists extensions;
+create extension if not exists vector with schema extensions;
 
 create table if not exists public.locations (
   id integer primary key,
@@ -35,11 +37,15 @@ create table if not exists public.messages (
     term_week_when_written is null
     or term_week_when_written between 1 and 12
   ),
-  created_at timestamptz not null default now()
+  created_at timestamptz not null default now(),
+  embedding extensions.vector(1536)
 );
 
 alter table public.messages
   add column if not exists author_label text not null default 'Anonymous Student';
+
+alter table public.messages
+  add column if not exists embedding extensions.vector(1536);
 
 comment on column public.messages.author_label is
   'Canonical anonymous display label. Keep pseudonym during migration only.';
@@ -53,6 +59,51 @@ where author_label = 'Anonymous Student'
 
 create index if not exists messages_location_created_idx
   on public.messages(location_id, created_at desc);
+
+create or replace function public.match_messages_for_location(
+  query_embedding extensions.vector(1536),
+  target_location_id integer,
+  match_count integer default 30
+)
+returns table (
+  id uuid,
+  location_id integer,
+  author_id uuid,
+  author_label text,
+  pseudonym text,
+  body text,
+  tags text[],
+  course_tags text[],
+  upvotes integer,
+  status text,
+  term_week_when_written integer,
+  created_at timestamptz,
+  semantic_similarity double precision
+)
+language sql
+stable
+as $$
+  select
+    m.id,
+    m.location_id,
+    m.author_id,
+    m.author_label,
+    m.pseudonym,
+    m.body,
+    m.tags,
+    m.course_tags,
+    m.upvotes,
+    m.status,
+    m.term_week_when_written,
+    m.created_at,
+    1 - (m.embedding <=> query_embedding) as semantic_similarity
+  from public.messages as m
+  where m.location_id = target_location_id
+    and m.status = 'public'
+    and m.embedding is not null
+  order by m.embedding <=> query_embedding
+  limit match_count;
+$$;
 
 create index if not exists profiles_current_location_idx
   on public.profiles(current_location_id)
