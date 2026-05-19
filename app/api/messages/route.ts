@@ -58,13 +58,6 @@ export async function POST(request: Request) {
     );
   }
 
-  if (checkInToken === null) {
-    return NextResponse.json(
-      { error: "A valid QR check-in token is required to post a message." },
-      { status: 401 },
-    );
-  }
-
   const tokenResult = verifyDeskToken(checkInToken, locationId);
   if (!tokenResult.ok) {
     return NextResponse.json({ error: tokenResult.error }, { status: 401 });

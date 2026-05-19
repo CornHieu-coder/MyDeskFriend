@@ -29,12 +29,16 @@ export function signDeskToken(locationId: number): string | null {
   return `${encoded}.${sig}`;
 }
 
-export function verifyDeskToken(token: string, locationId: number): VerifyResult {
+export function verifyDeskToken(token: string | null, locationId: number): VerifyResult {
   const secret = getSecret();
 
   // APP_SECRET not configured — skip verification so dev works without env setup
   if (!secret) {
     return { ok: true, payload: { deskId: locationId, iat: Math.floor(Date.now() / 1000) } };
+  }
+
+  if (!token) {
+    return { ok: false, error: "A valid QR check-in token is required to post a message." };
   }
 
   const dotIndex = token.indexOf(".");
