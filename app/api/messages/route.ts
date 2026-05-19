@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getDisplayAuthorLabel } from "@/lib/author-label";
 import { createAuthorLabel } from "@/lib/pseudonym";
+import { verifyDeskToken } from "@/lib/qr-token";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 const maxMessageLength = 1000;
@@ -27,6 +28,7 @@ export async function POST(request: Request) {
   const locationId = Number(payload.locationId);
   const body = payload.body.trim();
   const demoUserId = payload.demoUserId.trim();
+  const checkInToken = typeof payload.checkInToken === "string" ? payload.checkInToken : null;
 
   if (!Number.isInteger(locationId)) {
     return NextResponse.json(
@@ -54,6 +56,18 @@ export async function POST(request: Request) {
       { error: "Anonymous browser id is missing. Refresh and try again." },
       { status: 400 },
     );
+  }
+
+  if (checkInToken === null) {
+    return NextResponse.json(
+      { error: "A valid QR check-in token is required to post a message." },
+      { status: 401 },
+    );
+  }
+
+  const tokenResult = verifyDeskToken(checkInToken, locationId);
+  if (!tokenResult.ok) {
+    return NextResponse.json({ error: tokenResult.error }, { status: 401 });
   }
 
   const supabase = createServerSupabaseClient();
@@ -167,7 +181,12 @@ export async function POST(request: Request) {
 
 function isMessagePayload(
   payload: unknown,
-): payload is { locationId: string | number; body: string; demoUserId: string } {
+): payload is {
+  locationId: string | number;
+  body: string;
+  demoUserId: string;
+  checkInToken: unknown;
+} {
   if (!payload || typeof payload !== "object") {
     return false;
   }
