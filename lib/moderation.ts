@@ -175,7 +175,7 @@ function inferCourseTags(body: string) {
 }
 
 function inferMessageTags(body: string, courseTags: string[]) {
-  const tags = messageTagRules
+  const tags: string[] = messageTagRules
     .filter(({ pattern }) => pattern.test(body))
     .map(({ tag }) => tag);
 
