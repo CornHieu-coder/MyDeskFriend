@@ -14,7 +14,7 @@ export async function GET(
   }
 
   const token = signDeskToken(result.location.id);
-  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+  const baseUrl = (process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000").replace(/\/$/, "");
   const url = `${baseUrl}/scan?desk=${result.location.qr_slug}&token=${token}`;
 
   return NextResponse.json({ url });
