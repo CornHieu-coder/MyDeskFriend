@@ -6,6 +6,7 @@ import { FormEvent, useState, useTransition } from "react";
 type MessageComposerProps = {
   locationId: number;
   locationName: string;
+  checkInToken: string | null;
 };
 
 const maxMessageLength = 1000;
@@ -14,6 +15,7 @@ const demoUserStorageKey = "demo_user_id";
 export function MessageComposer({
   locationId,
   locationName,
+  checkInToken,
 }: MessageComposerProps) {
   const router = useRouter();
   const [body, setBody] = useState("");
@@ -46,6 +48,7 @@ export function MessageComposer({
           locationId,
           body: trimmedBody,
           demoUserId: getOrCreateDemoUserId(),
+          checkInToken,
         }),
       });
 

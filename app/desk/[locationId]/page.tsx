@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { getLocationById } from "@/lib/locations";
 import { getMessagesForLocation } from "@/lib/messages";
+import { signDeskToken } from "@/lib/qr-token";
 import { DeskArchiveClient } from "./desk-archive-client";
 
 export const dynamic = "force-dynamic";
@@ -24,8 +25,11 @@ export default async function DeskPage({ params }: DeskPageProps) {
     notFound();
   }
 
+  const checkInToken = signDeskToken(result.location.id);
+
   return (
     <DeskArchiveClient
+      checkInToken={checkInToken}
       debugInfo={
         showDebugInfo
           ? {

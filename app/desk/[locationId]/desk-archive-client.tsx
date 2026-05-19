@@ -10,6 +10,7 @@ import { MessageComposer } from "./message-composer";
 type DeskArchiveClientProps = {
   location: LocationRecord;
   messages: MessageRecord[];
+  checkInToken: string | null;
   debugInfo?: {
     locationSource: string;
     messageSource: string;
@@ -50,6 +51,7 @@ const personaProfiles: StudyProfile[] = [
 export function DeskArchiveClient({
   location,
   messages,
+  checkInToken,
   debugInfo,
 }: DeskArchiveClientProps) {
   const [profile, setProfile] = useState<StudyProfile | null>(null);
@@ -177,6 +179,7 @@ export function DeskArchiveClient({
 
           <aside className="lg:sticky lg:top-6 lg:self-start">
             <MessageComposer
+              checkInToken={checkInToken}
               locationId={location.id}
               locationName={location.name}
             />
