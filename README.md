@@ -3,44 +3,31 @@
 QR-first campus place archive for the DevSoc Flagship Hackathon theme:
 connection through places, time, and students who never meet.
 
-## Hour 0-2 Status
+## Current Status
 
-Completed:
+Hour 0-2 is complete locally:
 
-- Created a Next.js App Router project with TypeScript, Tailwind, ESLint, and npm scripts.
-- Installed core packages: `@supabase/supabase-js`, `openai`, and `qrcode`.
-- Added typed Supabase browser/server helpers in `lib/supabase/`.
-- Added an OpenAI client helper in `lib/openai.ts`.
-- Added minimum Supabase schema and seed SQL for `locations`, `profiles`, and `messages`.
-- Seeded 8 demo locations, including `id=47` / Desk 47 / Main Library / Level 3.
-- Added `/desk/47` as the first QR landing route.
-- Added `/api/health` to verify app status and Desk 47 lookup source.
-- Added static fallback data so the app builds and demos before Supabase env vars are connected.
+- Next.js App Router project is set up.
+- TypeScript, Tailwind, ESLint, Supabase, OpenAI, and QR dependencies are installed.
+- Supabase env vars are configured locally.
+- `/api/health` can fetch Desk 47 from Supabase.
+- Minimum tables exist: `locations`, `profiles`, and `messages`.
 
-Broken or blocked:
+Hour 2-7 is complete locally:
 
-- Supabase is not connected locally because env vars are missing.
-- Vercel deployment is not complete from this machine because Vercel project/auth/env access was not available.
+- `/desk/47` renders the real Desk 47 archive page.
+- The page fetches public messages from Supabase.
+- Desk 47 has seeded demo messages.
+- The page shows mobile-friendly message cards with pseudonyms, timestamps, tags, course tags, and upvotes.
+- The page has a message form.
+- `POST /api/messages` validates and saves new public messages.
+- The page includes a QR code for the desk URL.
 
-Fallback used:
+Still not complete:
 
-- `lib/demoData.ts` mirrors the seeded locations and powers `/desk/47` until Supabase credentials are configured.
-
-Next action:
-
-- Create/connect the Supabase project, run `supabase/schema.sql` and `supabase/seed.sql`, add env vars locally and in Vercel, then confirm `/api/health` reports `supabaseConfigured: true` and `desk47.source: "supabase"`.
-
-Demo risk:
-
-- Low for local skeleton and Desk 47 route.
-- Medium until the deployed Vercel URL is live and reading Supabase.
-
-Verification performed:
-
-- `npm run lint` passes.
-- `npm run build` passes.
-- Local dev server started at `http://127.0.0.1:3000`.
-- `/api/health` returns Desk 47 from `seed-fallback` while Supabase env vars are missing.
+- Vercel deployment has not been verified from this machine.
+- Phone-camera QR scan has not been verified against a deployed URL.
+- `OPENAI_API_KEY`, `APP_SECRET`, and `NEXT_PUBLIC_SITE_URL` are not configured locally yet.
 
 ## Setup
 
@@ -49,7 +36,11 @@ npm install
 npm run dev
 ```
 
-Open `http://localhost:3000` or go straight to `http://localhost:3000/desk/47`.
+Open:
+
+- `http://localhost:3000`
+- `http://localhost:3000/desk/47`
+- `http://localhost:3000/api/health`
 
 ## Environment Variables
 
@@ -58,11 +49,21 @@ Copy `.env.example` to `.env.local` and fill in:
 ```bash
 NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_ANON_KEY=
+NEXT_PUBLIC_SITE_URL=
 OPENAI_API_KEY=
 APP_SECRET=
 ```
 
-Only `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` are needed for the Hour 0-2 Desk 47 fetch check. `OPENAI_API_KEY` and `APP_SECRET` are reserved for later ranking, moderation, and signed QR work.
+Needed now:
+
+- `NEXT_PUBLIC_SUPABASE_URL`
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+
+Needed later:
+
+- `NEXT_PUBLIC_SITE_URL` for deployed QR URLs
+- `OPENAI_API_KEY` for embeddings and moderation
+- `APP_SECRET` for signed QR tokens and pseudonyms
 
 ## Supabase Bootstrap
 
@@ -71,13 +72,11 @@ Run these SQL files in the Supabase SQL editor:
 1. `supabase/schema.sql`
 2. `supabase/seed.sql`
 
-Minimum tables:
+The seed file includes:
 
-- `locations`
-- `profiles`
-- `messages`
-
-The demo seed includes Desk 47 and seven other campus locations.
+- 8 locations
+- 24 Desk 47 public messages
+- 4 messages across other demo locations
 
 ## Verification
 
@@ -88,10 +87,28 @@ npm run build
 
 Then check:
 
-- `/` shows the Hour 0-2 checkpoint status.
-- `/desk/47` renders Desk 47.
-- `/api/health` returns JSON with Desk 47 lookup status.
+- `/api/health` reports `desk47.source: "supabase"`.
+- `/api/health` reports a positive `desk47Messages.count`.
+- `/desk/47` shows seeded messages.
+- Submitting a safe message returns HTTP 201 from `POST /api/messages`.
+- Refreshing `/desk/47` shows the submitted message.
 
-## Deployment
+## Main Files
 
-Deploy this repo to Vercel as a standard Next.js app. Add the same env vars in Vercel Project Settings before checking the Supabase connection on the deployed URL.
+- `app/desk/[locationId]/page.tsx` renders the desk archive page.
+- `app/desk/[locationId]/message-composer.tsx` handles the browser-side message form.
+- `app/api/messages/route.ts` saves new messages to Supabase.
+- `app/api/health/route.ts` reports location/message health.
+- `lib/locations.ts` fetches locations with fallback data.
+- `lib/messages.ts` fetches messages with fallback data.
+- `lib/demoData.ts` stores local fallback locations and messages.
+- `supabase/schema.sql` creates tables and RLS policies.
+- `supabase/seed.sql` seeds demo locations and messages.
+
+## Handoffs
+
+- `docs/hour-0-2-debugging-handoff.md`
+- `docs/hour-2-7-debugging-handoff.md`
+- `docs/detailed-execution-guide.md`
+
+Read the relevant handoff before continuing to the next checkpoint.
