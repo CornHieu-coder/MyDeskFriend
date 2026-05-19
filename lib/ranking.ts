@@ -43,6 +43,13 @@ const examPeriod = true;
 const timeContext = "late night study";
 const daysInYear = 365;
 const millisecondsPerDay = 24 * 60 * 60 * 1000;
+export const semanticMatchThresholds: SemanticMatchThresholds = {
+  // Embedding cosine similarities are model- and dataset-dependent. The Desk 47
+  // demo messages cluster around the low 0.50s, so these thresholds are tuned
+  // for visible hackathon demo labels while still requiring a real match.
+  strong: 0.52,
+  medium: 0.46,
+};
 
 export function buildContextString(profile: StudyProfile) {
   const profileHint = getProfileHint(profile.profileId);
@@ -101,16 +108,9 @@ export function getWhyThisMessage(
 ) {
   const reasons: string[] = [];
   const primaryCourse = scoreParts.matchedCourses[0];
-  const semanticMatchLabel = getSemanticMatchLabel(
-    scoreParts.hasSemanticSimilarity ? scoreParts.semanticSimilarity : null,
-  );
 
   if (primaryCourse) {
     reasons.push(`Matched ${primaryCourse}`);
-  }
-
-  if (semanticMatchLabel) {
-    reasons.push(semanticMatchLabel);
   }
 
   if (scoreParts.matchedTag) {
@@ -134,10 +134,7 @@ export function getWhyThisMessage(
 
 export function getSemanticMatchLabel(
   semanticSimilarity?: number | null,
-  thresholds: SemanticMatchThresholds = {
-    strong: 0.78,
-    medium: 0.62,
-  },
+  thresholds = semanticMatchThresholds,
 ) {
   if (typeof semanticSimilarity !== "number" || !Number.isFinite(semanticSimilarity)) {
     return null;

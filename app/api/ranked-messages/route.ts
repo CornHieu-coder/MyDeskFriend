@@ -3,6 +3,7 @@ import { getMessagesForLocation, type MessageRecord } from "@/lib/messages";
 import { embedText } from "@/lib/openai";
 import {
   buildContextString,
+  getSemanticMatchLabel,
   rankMessages,
   type RankedMessage,
   type StudyProfile,
@@ -55,7 +56,10 @@ export async function POST(request: Request) {
     ...message,
     semantic_similarity: semanticByMessageId.similarities.get(message.id) ?? null,
   }));
-  const rankedMessages = rankMessages(messagesWithSimilarity, profile);
+  const rankedMessages = addSemanticReasonChips(
+    rankMessages(messagesWithSimilarity, profile),
+    semanticByMessageId.mode,
+  );
 
   return NextResponse.json({
     contextString,
@@ -66,6 +70,74 @@ export async function POST(request: Request) {
       serializeRankedMessage(message, index),
     ),
   });
+}
+
+function addSemanticReasonChips(
+  messages: Array<RankedMessage<MessageRecord>>,
+  rankingMode: "stage-a" | "stage-b",
+) {
+  if (rankingMode !== "stage-b") {
+    return messages.map((message) => ({
+      ...message,
+      rankingReasons: normalizeReasonChips(message.rankingReasons),
+    }));
+  }
+
+  return messages.map((message) => ({
+    ...message,
+    rankingReasons: normalizeReasonChips([
+      ...message.rankingReasons,
+      getSemanticMatchLabel(message.semantic_similarity),
+    ]),
+  }));
+}
+
+function normalizeReasonChips(chips: Array<string | null>) {
+  const uniqueChips = Array.from(
+    new Set(chips.filter((chip): chip is string => Boolean(chip))),
+  );
+
+  if (uniqueChips.includes("Strong semantic match")) {
+    return sortReasonChips(
+      uniqueChips.filter((chip) => chip !== "Medium semantic match"),
+    );
+  }
+
+  return sortReasonChips(uniqueChips);
+}
+
+function sortReasonChips(chips: string[]) {
+  return [...chips].sort(
+    (first, second) => getReasonChipPriority(first) - getReasonChipPriority(second),
+  );
+}
+
+function getReasonChipPriority(chip: string) {
+  if (chip.startsWith("Matched ")) {
+    return 1;
+  }
+
+  if (chip === "Strong semantic match" || chip === "Medium semantic match") {
+    return 2;
+  }
+
+  if (
+    chip === "Exam advice" ||
+    chip === "Study tip" ||
+    chip === "Emotional support"
+  ) {
+    return 3;
+  }
+
+  if (chip === "Relevant to week 10") {
+    return 4;
+  }
+
+  if (chip === "Popular at this desk") {
+    return 5;
+  }
+
+  return 6;
 }
 
 async function getSemanticSimilarities({

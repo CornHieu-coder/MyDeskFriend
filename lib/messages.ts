@@ -12,6 +12,7 @@ export type MessageLookupResult = {
 
 const messageSelect =
   "*";
+const messageFetchLimit = 150;
 
 export async function getMessagesForLocation(
   locationId: string,
@@ -43,7 +44,7 @@ export async function getMessagesForLocation(
     .eq("location_id", id)
     .eq("status", "public")
     .order("created_at", { ascending: false })
-    .limit(50);
+    .limit(messageFetchLimit);
 
   if (error) {
     return {

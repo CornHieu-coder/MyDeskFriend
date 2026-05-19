@@ -7,9 +7,7 @@ import type { LocationRecord } from "@/lib/locations";
 import type { MessageRecord } from "@/lib/messages";
 import {
   buildContextString,
-  getSemanticMatchLabel,
   rankMessages,
-  type SemanticMatchThresholds,
   type StudyProfile,
 } from "@/lib/ranking";
 import { MessageComposer } from "./message-composer";
@@ -108,10 +106,6 @@ export function DeskArchiveClient({
   const contextString =
     apiRanking?.contextString ?? (profile ? buildContextString(profile) : "");
   const rankingMode = apiRanking?.mode ?? "stage-a";
-  const semanticMatchThresholds = useMemo(
-    () => getRelativeSemanticMatchThresholds(displayedMessages, rankingMode),
-    [displayedMessages, rankingMode],
-  );
 
   useEffect(() => {
     if (!profile) {
@@ -259,7 +253,6 @@ export function DeskArchiveClient({
                     message={message}
                     rankIndex={index}
                     rankingMode={rankingMode}
-                    semanticMatchThresholds={semanticMatchThresholds}
                   />
                 ))}
               </div>
@@ -492,12 +485,10 @@ function MessageCard({
   message,
   rankIndex,
   rankingMode,
-  semanticMatchThresholds,
 }: {
   message: DisplayedMessage;
   rankIndex: number;
   rankingMode: "stage-a" | "stage-b";
-  semanticMatchThresholds: SemanticMatchThresholds | null;
 }) {
   const tagList = [...message.tags, ...message.course_tags];
   const authorLabel = getDisplayAuthorLabel(message);
@@ -505,7 +496,6 @@ function MessageCard({
     message,
     rankIndex,
     rankingMode,
-    semanticMatchThresholds,
   );
 
   return (
@@ -554,24 +544,18 @@ function getVisibleWhyChips(
   message: DisplayedMessage,
   rankIndex: number,
   rankingMode: "stage-a" | "stage-b",
-  semanticMatchThresholds: SemanticMatchThresholds | null,
 ) {
-  const baseChips = normalizeWhyChips(message.rankingReasons);
-  const semanticChip =
-    rankingMode === "stage-b" && semanticMatchThresholds
-      ? getSemanticMatchLabel(message.semantic_similarity, semanticMatchThresholds)
-      : null;
-  const fullChips = mergeWhyChips(baseChips, semanticChip);
+  const fullChips = normalizeWhyChips(message.rankingReasons);
 
   if (rankingMode === "stage-a") {
     return rankIndex < 3 ? fullChips.slice(0, 4) : [];
   }
 
   if (rankIndex < 3) {
-    return fullChips.slice(0, 4);
+    return fullChips.slice(0, 5);
   }
 
-  if (rankIndex < 8) {
+  if (rankIndex < 10) {
     return fullChips
       .filter(isLimitedWhyChip)
       .slice(0, 2);
@@ -580,46 +564,20 @@ function getVisibleWhyChips(
   const matchedCourseChip = fullChips.find((chip) =>
     chip.startsWith("Matched "),
   );
-  const strongSemanticChip = fullChips.find(
-    (chip) => chip === "Strong semantic match",
+  const semanticChip = fullChips.find(
+    (chip) =>
+      chip === "Strong semantic match" || chip === "Medium semantic match",
   );
 
-  return matchedCourseChip && strongSemanticChip
-    ? [matchedCourseChip, strongSemanticChip]
+  return matchedCourseChip && semanticChip
+    ? [matchedCourseChip, semanticChip]
     : [];
 }
 
-function getRelativeSemanticMatchThresholds(
-  messages: DisplayedMessage[],
-  rankingMode: "stage-a" | "stage-b",
-): SemanticMatchThresholds | null {
-  if (rankingMode !== "stage-b") {
-    return null;
-  }
-
-  const similarities = messages
-    .map((message) => message.semantic_similarity)
-    .filter(
-      (similarity): similarity is number =>
-        typeof similarity === "number" && Number.isFinite(similarity),
-    )
-    .sort((first, second) => second - first);
-
-  if (similarities.length === 0) {
-    return null;
-  }
-
-  // Embedding scores are model- and dataset-dependent, and often cluster in a
-  // narrow range. Relative thresholds make the chip labels useful for each
-  // ranked response without changing the actual ranking formula.
-  return {
-    strong: similarities[Math.max(0, Math.ceil(similarities.length * 0.2) - 1)],
-    medium: similarities[Math.max(0, Math.ceil(similarities.length * 0.5) - 1)],
-  };
-}
-
 function normalizeWhyChips(reasons: string[]) {
-  return reasons.flatMap((reason) => splitWhyReason(reason)).filter(Boolean);
+  return dedupeExclusiveSemanticChips(
+    reasons.flatMap((reason) => splitWhyReason(reason)).filter(Boolean),
+  );
 }
 
 function splitWhyReason(reason: string) {
@@ -632,28 +590,50 @@ function splitWhyReason(reason: string) {
   return [reason];
 }
 
-function mergeWhyChips(chips: string[], semanticChip: string | null) {
-  const mergedChips: string[] = [];
+function dedupeExclusiveSemanticChips(chips: string[]) {
+  const uniqueChips = Array.from(new Set(chips));
 
-  for (const chip of chips) {
-    if (!mergedChips.includes(chip)) {
-      mergedChips.push(chip);
-    }
-  }
-
-  if (semanticChip && !mergedChips.includes(semanticChip)) {
-    const firstNonCourseIndex = mergedChips.findIndex(
-      (chip) => !chip.startsWith("Matched "),
+  if (uniqueChips.includes("Strong semantic match")) {
+    return sortWhyChips(
+      uniqueChips.filter((chip) => chip !== "Medium semantic match"),
     );
-
-    if (firstNonCourseIndex === -1) {
-      mergedChips.push(semanticChip);
-    } else {
-      mergedChips.splice(firstNonCourseIndex, 0, semanticChip);
-    }
   }
 
-  return mergedChips;
+  return sortWhyChips(uniqueChips);
+}
+
+function sortWhyChips(chips: string[]) {
+  return [...chips].sort(
+    (first, second) => getWhyChipPriority(first) - getWhyChipPriority(second),
+  );
+}
+
+function getWhyChipPriority(chip: string) {
+  if (chip.startsWith("Matched ")) {
+    return 1;
+  }
+
+  if (chip === "Strong semantic match" || chip === "Medium semantic match") {
+    return 2;
+  }
+
+  if (
+    chip === "Exam advice" ||
+    chip === "Study tip" ||
+    chip === "Emotional support"
+  ) {
+    return 3;
+  }
+
+  if (chip === "Relevant to week 10") {
+    return 4;
+  }
+
+  if (chip === "Popular at this desk") {
+    return 5;
+  }
+
+  return 6;
 }
 
 function isLimitedWhyChip(chip: string) {

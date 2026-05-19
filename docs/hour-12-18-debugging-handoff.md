@@ -656,6 +656,242 @@ Result:
 
 - Both passed.
 
+## Latest Semantic Chip Bug Fix
+
+Date:
+
+```text
+May 20, 2026
+```
+
+Problem:
+
+Some cards showed both:
+
+```text
+Medium semantic match
+Strong semantic match
+```
+
+That should never happen.
+
+Root cause:
+
+- `lib/ranking.ts` could add a fixed-threshold semantic chip.
+- `app/desk/[locationId]/desk-archive-client.tsx` could add a relative semantic chip.
+- A message could therefore receive one semantic label from the API and another semantic label from the UI.
+
+Fix:
+
+- `lib/ranking.ts` no longer adds semantic chips inside the base ranker.
+- `app/api/ranked-messages/route.ts` now adds exactly one relative semantic chip per ranked response.
+- `desk-archive-client.tsx` now only filters and displays the chips it receives.
+- A defensive cleanup removes `Medium semantic match` if `Strong semantic match` is present.
+
+Important:
+
+- The ranking formula did not change.
+- Stage B still works.
+- Stage A fallback still works.
+- Raw score/debug JSON is not shown in the UI.
+
+Verification:
+
+```json
+{
+  "mode": "stage-b",
+  "semanticSimilarity": 0.90076467219081,
+  "apiWhy": [
+    "Matched COMP2521",
+    "Exam advice",
+    "Relevant to week 10",
+    "Medium semantic match"
+  ],
+  "apiHasBoth": false,
+  "uiHasBoth": false,
+  "hasRawDebug": false
+}
+```
+
+Regression checks:
+
+```json
+{
+  "apiHealthWorks": true,
+  "hasQrCode": false,
+  "hasLocalhostUrl": false,
+  "postingStillWorks": true,
+  "authorLabelExample": "Desk-47 Fox"
+}
+```
+
+Commands:
+
+```bash
+npm run lint
+npm run build
+```
+
+Result:
+
+- `npm run lint` passed with one existing warning about `<img>` in `app/home-content.tsx`.
+- `npm run build` passed.
+
+## Latest Semantic Threshold Fix
+
+Date:
+
+```text
+May 20, 2026
+```
+
+Problem:
+
+- A message could lose `Strong semantic match` when a newer message had a higher semantic score.
+- This happened because semantic chips were based on relative percentiles.
+- That made the label feel like a winner-takes-all badge.
+
+What changed:
+
+File:
+
+```text
+lib/ranking.ts
+```
+
+Semantic chips now use fixed per-message thresholds:
+
+```text
+Strong semantic match >= 0.50
+Medium semantic match >= 0.43
+No semantic chip < 0.43
+```
+
+Why:
+
+- Our local embedding scores cluster around `0.50-0.55`.
+- Absolute thresholds are easier to understand in the demo.
+- Multiple messages can now show `Strong semantic match` at the same time.
+
+File:
+
+```text
+app/api/ranked-messages/route.ts
+```
+
+What changed:
+
+- Removed relative/percentile semantic threshold logic.
+- The API now adds semantic chips using fixed thresholds.
+- Chip priority is:
+
+```text
+1. Matched course
+2. Strong/Medium semantic match
+3. Exam advice / Study tip / Emotional support
+4. Relevant to week 10
+5. Popular at this desk
+```
+
+Defensive rule:
+
+```text
+If Strong semantic match exists, remove Medium semantic match.
+```
+
+File:
+
+```text
+app/desk/[locationId]/desk-archive-client.tsx
+```
+
+What changed:
+
+- Top 3 cards can show up to 5 chips.
+- The UI still removes duplicate chips.
+- The UI still prevents one card from showing both `Medium semantic match` and `Strong semantic match`.
+
+Extra fix:
+
+File:
+
+```text
+lib/messages.ts
+```
+
+What changed:
+
+- The message fetch limit increased from 50 to 150.
+
+Why:
+
+- The live database had enough test posts that older FINS1613/ECON1101 seed messages fell outside the latest 50 rows.
+- Jamie ranking looked wrong because the ranker never saw the Jamie-relevant candidate messages.
+
+Verification:
+
+Alex API result:
+
+```json
+{
+  "mode": "stage-b",
+  "strongCount": 6,
+  "mediumCount": 4,
+  "violations": []
+}
+```
+
+Meaning:
+
+- Every message with `semantic_similarity >= 0.50` had `Strong semantic match`.
+- Every message with `0.43 <= semantic_similarity < 0.50` had `Medium semantic match`.
+- No message had both semantic labels.
+
+Jamie API result:
+
+```json
+{
+  "mode": "stage-b",
+  "topMessageCourseTags": "FINS1613,ECON1101",
+  "topWhy": "Matched FINS1613 | Strong semantic match | Exam advice | Relevant to week 10"
+}
+```
+
+Browser smoke test:
+
+```json
+{
+  "mode": "stage-b",
+  "strongCount": 5,
+  "cardsWithBoth": 0,
+  "hasRawDebug": false,
+  "hasQrText": false
+}
+```
+
+Posting regression:
+
+```json
+{
+  "author_label": "Desk-47 Fox",
+  "tags": "exam advice,study tip",
+  "course_tags": "COMP2521",
+  "term_week_when_written": 10
+}
+```
+
+Commands:
+
+```bash
+npm run lint
+npm run build
+```
+
+Result:
+
+- `npm run lint` passed with one existing warning about `<img>` in `app/home-content.tsx`.
+- `npm run build` passed.
+
 Health check:
 
 ```text
@@ -1839,3 +2075,115 @@ Continue to Hours 18-22 live presence after:
 - message posting still works
 
 Do not block the hackathon demo on embeddings.
+
+## Update: Semantic Match Chip Calibration
+
+Problem found:
+
+- Stage B was working, but the old semantic chip thresholds made Medium labels hard to see.
+- The UI also hid semantic chips too aggressively on lower-ranked cards.
+- The ranking API already used exclusive logic, so the same card cannot correctly show both `Strong semantic match` and `Medium semantic match`.
+
+Code changes:
+
+- In `lib/ranking.ts`, semantic chip thresholds are now:
+
+```ts
+strong: 0.52
+medium: 0.46
+```
+
+Why:
+
+- Desk 47 embedding similarities cluster around the low `0.50` range.
+- These numbers are calibrated for the current hackathon demo dataset.
+- The label is still per message, not winner-takes-all. Multiple messages can show Strong at the same time.
+
+Display changes:
+
+- Top 3 messages show up to 5 chips.
+- Messages ranked 4-10 keep useful limited chips, including Medium or Strong semantic chips.
+- Lower messages can still show semantic chips when the card also matches a selected course.
+- A cleanup guard removes `Medium semantic match` whenever `Strong semantic match` is present on the same message.
+
+Seed data changes:
+
+- Added 6 medium-strength Desk 47 seed messages to `supabase/seed.sql`.
+- Alex medium-target rows:
+  - COMP2521 tracing a tiny input
+  - MATH1081 definitions in plain English
+  - algorithms question: idea before implementation
+- Jamie medium-target rows:
+  - FINS1613 variable meanings before formulas
+  - ECON1101 graph story before equilibrium
+  - finance quiz intuition before numbers
+
+Live local Supabase update:
+
+- The 6 new seed rows were upserted into Supabase with stable IDs.
+- The admin embedding endpoint embedded all missing public messages.
+
+Embedding result:
+
+```json
+{
+  "beforeMissingEmbeddings": 51,
+  "afterMissingEmbeddings": 0,
+  "totalPublicMessages": 104
+}
+```
+
+API verification after calibration:
+
+Alex:
+
+```json
+{
+  "mode": "stage-b",
+  "warning": null,
+  "totalMessages": 104,
+  "semanticCount": 50,
+  "minSemantic": 0.2594,
+  "maxSemantic": 1,
+  "strongCount": 4,
+  "mediumCount": 6,
+  "bothMediumAndStrongCount": 0
+}
+```
+
+Alex examples:
+
+- Strong: `COMP2521, MATH1081, UNSW term week 10...`
+- Strong: `COMP2521 and MATH1081 week 10 exam grind...`
+- Medium: `For COMP2521 complexity, say what n represents before writing Big O...`
+- Medium: `If COMP2521 recursion feels impossible tonight...`
+
+Jamie:
+
+```json
+{
+  "mode": "stage-b",
+  "warning": null,
+  "totalMessages": 104,
+  "semanticCount": 50,
+  "minSemantic": 0.2438,
+  "maxSemantic": 0.8678,
+  "strongCount": 5,
+  "mediumCount": 4,
+  "bothMediumAndStrongCount": 0
+}
+```
+
+Jamie examples:
+
+- Strong: `FINS1613 and ECON1101 week 10 exam period...`
+- Strong: `For FINS1613, write the formula sheet from memory first...`
+- Medium: `For FINS1613, write the meaning of every variable...`
+- Medium: `For FINS1613, explain ratios in plain English...`
+
+Beginner debugging note:
+
+- If Medium disappears again, first check the response from `POST /api/ranked-messages`.
+- If the API contains Medium but the page does not show it, the bug is in `desk-archive-client.tsx` chip filtering.
+- If the API does not contain Medium, check `lib/ranking.ts` thresholds and whether the messages have embeddings.
+- If `mode` is `stage-a`, semantic chips are expected to be hidden because Stage A has no embedding similarity.
