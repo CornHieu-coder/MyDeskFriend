@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getDisplayAuthorLabel } from "@/lib/author-label";
 import { getLocationById } from "@/lib/locations";
@@ -28,6 +29,16 @@ export default async function DeskPage({ params }: DeskPageProps) {
   return (
     <main className="min-h-screen bg-[#f6f4ef] px-5 py-6 text-[#1d2520] sm:px-8">
       <div className="mx-auto flex min-h-[calc(100vh-3rem)] w-full max-w-5xl flex-col">
+        <nav className="mb-6">
+          <Link
+            aria-label="Go to welcome page"
+            className="inline-flex items-center rounded-full border border-[#cfd8d4] bg-white px-4 py-2 text-sm font-semibold text-[#426052] shadow-sm transition hover:bg-[#eef7f1] focus:outline-none focus:ring-2 focus:ring-[#b8d7c5]"
+            href="/"
+          >
+            Back to welcome
+          </Link>
+        </nav>
+
         <section className="rounded-lg border border-[#d8d2c5] bg-white p-6 shadow-sm sm:p-8">
           <div>
             <p className="text-sm font-semibold uppercase tracking-[0.14em] text-[#5a6f62]">
