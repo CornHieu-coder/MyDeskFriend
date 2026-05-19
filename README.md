@@ -69,7 +69,8 @@ Still not complete:
 - Vercel deployment has not been verified from this machine.
 - Phone-camera QR scan has not been verified against a deployed URL.
 - `APP_SECRET` should be configured before production/demo deployment.
-- `OPENAI_API_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, and `ADMIN_SECRET` are needed only for Stage B embedding administration.
+- `OPENAI_API_KEY` must be configured before posting new public messages.
+- `SUPABASE_SERVICE_ROLE_KEY` and `ADMIN_SECRET` are needed only for Stage B embedding administration.
 
 ## Setup
 
@@ -102,12 +103,14 @@ Needed now:
 - `NEXT_PUBLIC_SUPABASE_URL`
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
 - `APP_SECRET`
+- `OPENAI_API_KEY`
 
 `APP_SECRET` is server-only. Do not name it `NEXT_PUBLIC_APP_SECRET`. It is used to create stable anonymous per-desk labels from the browser's local demo user id.
 
+`OPENAI_API_KEY` is server-only. It is used by `POST /api/messages` to run OpenAI Moderation before saving a new public message.
+
 Needed later:
 
-- `OPENAI_API_KEY` for embeddings and moderation
 - `SUPABASE_SERVICE_ROLE_KEY` for the admin embedding batch route
 - `ADMIN_SECRET` to protect admin routes in production
 
@@ -276,8 +279,9 @@ Then check:
 - Jamie's top messages include FINS1613/ECON1101 content and why labels.
 - `/desk/47` does not show a QR panel or raw localhost/deployed URL.
 - Submitting a safe message returns HTTP 201 from `POST /api/messages`.
+- Submitting a URL, email, phone number, obvious abuse, or OpenAI-flagged unsafe message is blocked before insert.
 - Refreshing `/desk/47` shows the submitted message.
-- A new message has a stable anonymous label.
+- A new message has a stable anonymous label and automatic demo tags.
 - Supabase has the `messages.author_label` column after rerunning `supabase/schema.sql`.
 
 ## Main Files
@@ -290,6 +294,7 @@ Then check:
 - `app/api/messages/route.ts` saves new messages to Supabase and creates author labels.
 - `app/api/health/route.ts` reports location/message health.
 - `lib/author-label.ts` chooses the best display label during the `pseudonym` to `author_label` migration.
+- `lib/moderation.ts` blocks contact info/obvious abuse, calls OpenAI Moderation, and creates demo tags.
 - `lib/pseudonym.ts` creates stable anonymous per-desk labels.
 - `lib/ranking.ts` builds the profile context string and ranks messages for the saved study profile.
 - `lib/openai.ts` creates embeddings with `text-embedding-3-small`.

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getDisplayAuthorLabel } from "@/lib/author-label";
+import { moderateMessageBody } from "@/lib/moderation";
 import { embedText } from "@/lib/openai";
 import { enrichMessageBody } from "@/lib/message-enrichment";
 import { createAuthorLabel } from "@/lib/pseudonym";
@@ -90,6 +91,15 @@ export async function POST(request: Request) {
     return NextResponse.json(
       { error: "This desk does not exist." },
       { status: 404 },
+    );
+  }
+
+  const safetyCheck = await moderateMessageBody(body);
+
+  if (!safetyCheck.ok) {
+    return NextResponse.json(
+      { error: safetyCheck.error },
+      { status: safetyCheck.status },
     );
   }
 
