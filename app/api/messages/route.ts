@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getDisplayAuthorLabel } from "@/lib/author-label";
+import { moderateMessageBody } from "@/lib/moderation";
 import { createAuthorLabel } from "@/lib/pseudonym";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
@@ -85,6 +86,15 @@ export async function POST(request: Request) {
     );
   }
 
+  const safetyCheck = await moderateMessageBody(body);
+
+  if (!safetyCheck.ok) {
+    return NextResponse.json(
+      { error: safetyCheck.error },
+      { status: safetyCheck.status },
+    );
+  }
+
   let authorLabel: string;
 
   try {
@@ -108,8 +118,8 @@ export async function POST(request: Request) {
       author_label: authorLabel,
       pseudonym: authorLabel,
       body,
-      tags: [],
-      course_tags: [],
+      tags: safetyCheck.tags,
+      course_tags: safetyCheck.courseTags,
       status: "public",
     })
     .select("*")
@@ -125,8 +135,8 @@ export async function POST(request: Request) {
         location_id: locationId,
         pseudonym: authorLabel,
         body,
-        tags: [],
-        course_tags: [],
+        tags: safetyCheck.tags,
+        course_tags: safetyCheck.courseTags,
         status: "public",
       })
       .select("*")
@@ -159,6 +169,8 @@ export async function POST(request: Request) {
             : responseAuthorLabel,
         author_label: responseAuthorLabel,
         created_at: data?.created_at,
+        tags: data?.tags ?? safetyCheck.tags,
+        course_tags: data?.course_tags ?? safetyCheck.courseTags,
       },
     },
     { status: 201 },
