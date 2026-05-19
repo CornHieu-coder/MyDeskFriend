@@ -36,6 +36,18 @@ const obviousAbusePatterns = [
   /\b(?:you|u)\s+(?:are|r)\s+(?:an?\s+)?(?:idiot|moron|loser|stupid|trash)\b/i,
 ] as const;
 
+const profanityPatterns = [
+  /\bf[\W_]*u[\W_]*c[\W_]*k(?:e[rd]?|ing|s)?\b/i,
+  /\b(?:bull)?sh[\W_]*i[\W_]*t(?:ty|ting|s)?\b/i,
+  /\bb[\W_]*i[\W_]*t[\W_]*c[\W_]*h(?:es|ing)?\b/i,
+  /\bass(?:es)?\b/i,
+  /\basshole(?:s)?\b/i,
+  /\bbastard(?:s)?\b/i,
+  /\bdamn(?:ed|ing)?\b/i,
+  /\bdick(?:s)?\b/i,
+  /\bpiss(?:ed|ing|es)?\b/i,
+] as const;
+
 const knownCourses = [
   "COMP1511",
   "COMP2521",
@@ -143,6 +155,10 @@ function getRegexBlockMessage(body: string) {
 
   if (obviousAbusePatterns.some((pattern) => pattern.test(body))) {
     return "Abusive messages are not allowed in this demo.";
+  }
+
+  if (profanityPatterns.some((pattern) => pattern.test(body))) {
+    return "Please remove profanity before posting.";
   }
 
   return null;
