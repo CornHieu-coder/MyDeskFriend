@@ -5,16 +5,22 @@ import { FormEvent, useState, useTransition } from "react";
 
 type MessageComposerProps = {
   locationId: number;
+  locationName: string;
 };
 
 const maxMessageLength = 1000;
+const demoUserStorageKey = "demo_user_id";
 
-export function MessageComposer({ locationId }: MessageComposerProps) {
+export function MessageComposer({
+  locationId,
+  locationName,
+}: MessageComposerProps) {
   const router = useRouter();
   const [body, setBody] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-  const [isPending, startTransition] = useTransition();
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [, startTransition] = useTransition();
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -28,31 +34,38 @@ export function MessageComposer({ locationId }: MessageComposerProps) {
       return;
     }
 
-    const response = await fetch("/api/messages", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        locationId,
-        body: trimmedBody,
-      }),
-    });
+    setIsSubmitting(true);
 
-    const payload = (await response.json().catch(() => null)) as {
-      error?: string;
-    } | null;
+    try {
+      const response = await fetch("/api/messages", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          locationId,
+          body: trimmedBody,
+          demoUserId: getOrCreateDemoUserId(),
+        }),
+      });
 
-    if (!response.ok) {
-      setError(payload?.error ?? "Message could not be posted.");
-      return;
+      const payload = (await response.json().catch(() => null)) as {
+        error?: string;
+      } | null;
+
+      if (!response.ok) {
+        setError(payload?.error ?? "Message could not be posted.");
+        return;
+      }
+
+      setBody("");
+      setSuccess(`Posted — your note is now part of ${locationName}.`);
+      startTransition(() => {
+        router.refresh();
+      });
+    } finally {
+      setIsSubmitting(false);
     }
-
-    setBody("");
-    setSuccess("Posted. The archive is refreshing.");
-    startTransition(() => {
-      router.refresh();
-    });
   }
 
   return (
@@ -80,10 +93,10 @@ export function MessageComposer({ locationId }: MessageComposerProps) {
         </p>
         <button
           className="rounded-full bg-[#1f4d3a] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#173a2c] disabled:cursor-not-allowed disabled:bg-[#9aa8a1]"
-          disabled={isPending}
+          disabled={isSubmitting}
           type="submit"
         >
-          {isPending ? "Posting..." : "Post message"}
+          {isSubmitting ? "Posting..." : "Post message"}
         </button>
       </div>
       {error ? (
@@ -98,4 +111,17 @@ export function MessageComposer({ locationId }: MessageComposerProps) {
       ) : null}
     </form>
   );
+}
+
+function getOrCreateDemoUserId() {
+  const existingUserId = window.localStorage.getItem(demoUserStorageKey);
+
+  if (existingUserId) {
+    return existingUserId;
+  }
+
+  const nextUserId = window.crypto.randomUUID();
+  window.localStorage.setItem(demoUserStorageKey, nextUserId);
+
+  return nextUserId;
 }

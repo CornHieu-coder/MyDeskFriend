@@ -74,6 +74,8 @@ export type Database = {
           id: string;
           location_id: number;
           author_id: string | null;
+          // Canonical anonymous display label. Keep pseudonym during migration only.
+          author_label: string;
           pseudonym: string;
           body: string;
           tags: string[];
@@ -87,6 +89,8 @@ export type Database = {
           id?: string;
           location_id: number;
           author_id?: string | null;
+          // Canonical anonymous display label. Keep pseudonym during migration only.
+          author_label?: string;
           pseudonym?: string;
           body: string;
           tags?: string[];
@@ -100,6 +104,8 @@ export type Database = {
           id?: string;
           location_id?: number;
           author_id?: string | null;
+          // Canonical anonymous display label. Keep pseudonym during migration only.
+          author_label?: string;
           pseudonym?: string;
           body?: string;
           tags?: string[];

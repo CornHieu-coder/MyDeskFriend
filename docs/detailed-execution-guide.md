@@ -32,7 +32,7 @@ Infrastructure failures are the easiest way to lose a hackathon. Deploying early
 Implementation steps:
 
 1. Create GitHub repo and Next.js app with TypeScript, Tailwind, and App Router.
-2. Install core packages: `@supabase/supabase-js`, `openai`, `qrcode`, and any UI helpers already agreed by the team.
+2. Install core packages: `@supabase/supabase-js`, `openai`, and any UI helpers already agreed by the team.
 3. Create Supabase project.
 4. Add `locations`, `profiles`, and `messages` tables first.
 5. Add vector column later if pgvector setup slows progress.
@@ -80,8 +80,8 @@ Implementation steps:
 8. Validate non-empty text.
 9. Insert into `messages`.
 10. Return success.
-11. Generate QR codes that contain deployed URLs such as `https://yourapp.vercel.app/desk/47`.
-12. Do not build a scanner library. Use the phone camera.
+11. Use a physical QR code outside the app that opens the deployed `/desk/47` URL.
+12. Do not build QR generation, a scanner library, or browser camera features.
 13. Seed 20+ emotionally strong messages for Desk 47 and 2-3 other locations so the demo has content before live posting.
 
 Definition of done:
@@ -316,7 +316,7 @@ Judges experience the product through the demo, not the codebase. Seed content a
 Implementation steps:
 
 1. Improve mobile layout:
-   - large QR landing title
+   - clear scanned-desk landing title
    - readable cards
    - clear buttons
    - loading states
@@ -328,7 +328,7 @@ Implementation steps:
    - course-specific advice
    - memories
 4. Ensure seeded messages have course tags/upvotes so ranking differences are obvious.
-5. Prepare QR image for Desk 47, ideally printable or displayed on another screen.
+5. Prepare the physical QR image for Desk 47 outside the app, ideally printable or displayed on another screen.
 6. Take screenshots for Devpost image gallery:
    - onboarding
    - personalised feed

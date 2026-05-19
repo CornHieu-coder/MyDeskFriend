@@ -2,13 +2,19 @@
 
 Date: 2026-05-19
 
-This document explains what I did for Hours 2-7, why I did it, what happened after each step, and how a human teammate can debug it.
+This document explains the current Hour 2-7 archive loop after the pre-onboarding cleanup.
+
+Important correction:
+
+- `/desk/47` is the destination after a physical QR code is scanned.
+- The app does not generate QR codes.
+- The app does not show QR codes.
+- The app does not show raw localhost/deployed URLs.
+- The app does not use browser camera APIs.
 
 ## Goal For Hours 2-7
 
-The execution guide says Hours 2-7 should build the core QR archive loop.
-
-The target flow is:
+Build the core archive loop:
 
 ```text
 open /desk/47
@@ -20,447 +26,532 @@ open /desk/47
 -> refresh and see it in the archive
 ```
 
-This is the minimum product spine. Later work like onboarding, ranking, presence, moderation, and pseudonyms depends on this working first.
+## What Was Built
 
-## Starting State
+- `app/desk/[locationId]/page.tsx` renders the student-facing archive page.
+- `lib/messages.ts` fetches messages from Supabase with fallback demo data.
+- `app/desk/[locationId]/message-composer.tsx` lets a user post a message.
+- `app/api/messages/route.ts` validates and saves new messages.
+- `lib/pseudonym.ts` creates stable anonymous per-desk labels.
+- `supabase/schema.sql` now includes `messages.author_label`.
+- `supabase/seed.sql` seeds demo messages and backfills `author_label` from older `pseudonym` values.
 
-Before I started Hour 2-7:
+## What Was Removed
 
-- `/api/health` showed Desk 47 coming from Supabase.
-- Supabase env vars were working.
-- `locations`, `profiles`, and `messages` tables existed.
-- `/desk/47` only showed a location shell.
-- The page did not show messages yet.
-- There was no message form.
-- There was no `POST /api/messages`.
-- The live Supabase database had 0 public messages for Desk 47.
+Removed from `/desk/47`:
 
-The health JSON from the user showed:
+- QR code panel
+- QR generation
+- raw URL display
+- `NEXT_PUBLIC_SITE_URL` dependency
+- debug labels like `Messages from Supabase`
+- student-visible Supabase/fallback source labels
 
-```json
-{
-  "ok": true,
-  "app": "MyStudyFriend",
-  "checkpoint": "hours-0-2",
-  "supabaseConfigured": true,
-  "desk47": {
-    "source": "supabase",
-    "location": {
-      "id": 47,
-      "name": "Desk 47",
-      "building": "Main Library",
-      "floor": "Level 3"
-    }
-  }
-}
-```
+Removed from dependencies:
 
-That meant Hour 0-2 was good enough to continue.
+- `qrcode`
+- `@types/qrcode`
 
-## Step-By-Step: What I Did
+## How The Page Works Now
 
-### Step 1: I inspected the repo and schema
+When a user opens `/desk/47`:
 
-What I did:
+1. Next.js loads `app/desk/[locationId]/page.tsx`.
+2. The page reads `locationId` from the URL.
+3. The page calls `getLocationById(locationId)`.
+4. The page calls `getMessagesForLocation(locationId)`.
+5. The page renders:
+   - location name
+   - building
+   - floor
+   - archive count
+   - message cards
+   - message composer
+6. Debug source information appears only in development mode.
 
-- Checked `git status`.
-- Read `supabase/schema.sql`.
-- Read `supabase/seed.sql`.
-- Checked whether the local dev server was running.
+## Stable Anonymous Author Labels
 
-Why I did it:
+Goal:
 
-- I needed to know if the app was already clean and whether the database had the right table shape.
-
-What happened after:
-
-- The repo only had one uncommitted doc file: `docs/detailed-execution-guide.md`.
-- The `messages` table already existed in the schema.
-- The seed file only had locations, not real messages.
-- The local dev server was not running.
-
-### Step 2: I added fallback demo messages
-
-What I did:
-
-- Updated `lib/demoData.ts`.
-- Added a `DemoMessage` type.
-- Added 28 fallback messages:
-  - 24 for Desk 47
-  - 4 across other demo locations
-- Added `getDemoMessagesForLocation(locationId)`.
-
-Why I did it:
-
-- The app should not go blank if Supabase message fetching fails.
-- The execution guide says empty databases are not acceptable for the emotional demo.
-
-What happened after:
-
-- The app has local backup messages.
-- If Supabase message fetching fails, Desk 47 can still show a meaningful archive.
-
-### Step 3: I added a message fetch helper
-
-What I did:
-
-- Created `lib/messages.ts`.
-- Added `getMessagesForLocation(locationId)`.
-
-Why I did it:
-
-- Pages should not talk directly to Supabase everywhere.
-- The fallback logic should live in one file.
-
-What happened after:
-
-- The desk page can ask for messages without knowing if they come from Supabase or fallback data.
-- The helper returns:
-  - `messages`
-  - `source`
-  - optional `error`
-
-Simple flow:
+New messages should show labels like:
 
 ```text
-desk page asks for messages
--> getMessagesForLocation("47")
--> try Supabase
--> if Supabase fails, use demoData
--> return messages and source
+Desk-47 Lantern
+Desk-47 Owl
 ```
 
-### Step 4: I added the message POST API
+How it works:
 
-What I did:
-
-- Created `app/api/messages/route.ts`.
-- Added a `POST` handler.
-
-Why I did it:
-
-- The archive needs to let users leave messages.
-- Saving messages should happen through a server API route, not directly inside the page UI.
-
-What happened after:
-
-- The app has `POST /api/messages`.
-- It accepts JSON:
-
-```json
-{
-  "locationId": 47,
-  "body": "message text"
-}
-```
-
-- It validates:
-  - request is valid JSON
-  - `locationId` exists
-  - `locationId` is a whole number
-  - body is not empty
-  - body is 1000 characters or fewer
-  - location exists in Supabase
-- It inserts into `messages`.
-- It returns HTTP 201 with the saved message.
-
-### Step 5: I added the message form
-
-What I did:
-
-- Created `app/desk/[locationId]/message-composer.tsx`.
-- This is a client component.
-
-Why I did it:
-
-- The form needs browser interactivity:
-  - typing
-  - submit event
-  - success state
-  - error state
-  - page refresh after posting
-
-What happened after:
-
-- The desk page has a textarea and submit button.
-- On submit, it calls `/api/messages`.
-- If the API succeeds, it clears the textarea and refreshes the server-rendered archive.
-- If the API fails, it shows the error message.
-
-### Step 6: I replaced the Desk 47 shell with the archive page
-
-What I did:
-
-- Rewrote `app/desk/[locationId]/page.tsx`.
-
-Why I did it:
-
-- The page needed to become the actual archive screen.
-
-What happened after:
-
-- `/desk/47` now shows:
-  - location header
-  - Supabase/fallback location source
-  - QR code
-  - desk URL
-  - message count
-  - message source
-  - message cards
-  - message form
-
-### Step 7: I added QR code generation
-
-What I did:
-
-- Used the installed `qrcode` package inside the desk page.
-- Generated a QR data URL for the current desk URL.
-
-Why I did it:
-
-- The execution guide says the QR should contain the deployed desk URL.
-- We do not need a scanner library because phones already scan QR codes.
-
-What happened after:
-
-- The page displays a QR code.
-- Locally it points at the local desk URL.
-- On Vercel, it should use `NEXT_PUBLIC_SITE_URL` if that env var is set.
-
-Important note:
-
-- Add `NEXT_PUBLIC_SITE_URL` in Vercel so the QR points at the deployed app, not localhost.
-
-### Step 8: I updated the health endpoint
-
-What I did:
-
-- Updated `app/api/health/route.ts`.
-
-Why I did it:
-
-- The old health endpoint only checked Desk 47.
-- Hour 2-7 also needs to know if Desk 47 has messages.
-
-What happened after:
-
-- `/api/health` now returns:
-  - `desk47`
-  - `desk47Messages`
-- `desk47Messages.count` tells us how many public Desk 47 messages are visible.
-
-### Step 9: I updated the seed SQL
-
-What I did:
-
-- Updated `supabase/seed.sql`.
-- Added 28 seeded messages.
-
-Why I did it:
-
-- A fresh Supabase project should be able to seed real demo messages.
-- Desk 47 needs strong content before live posting.
-
-What happened after:
-
-- Running `supabase/seed.sql` now creates:
-  - 8 locations
-  - 24 Desk 47 messages
-  - 4 messages across other locations
-
-### Step 10: I seeded the live database
-
-What I did:
-
-- Checked `/api/health`.
-- It showed `desk47Messages.count: 0`.
-- Tried a one-off Supabase JS seed script.
-- That failed locally because Node 20.15 does not have the websocket support expected by the Supabase realtime client.
-- Switched to Supabase REST API.
-- Inserted only missing seed rows.
-
-Why I did it:
-
-- The code was ready, but the actual live Supabase database had no messages.
-- The definition of done requires seeded messages.
-
-What happened after:
-
-- 24 new Desk 47 seed messages were inserted into Supabase.
-- `/api/health` reported `desk47Messages.count: 24`.
-
-### Step 11: I verified posting
-
-What I did:
-
-- Sent a real POST request to `/api/messages`.
-- Body:
+1. The browser stores a local `demo_user_id` in `localStorage`.
+2. If the browser has no `demo_user_id`, the composer creates one with `crypto.randomUUID()`.
+3. The composer sends `demoUserId` to `POST /api/messages`.
+4. The server does not store `demoUserId`.
+5. The server creates an HMAC using `APP_SECRET`, `demoUserId`, and `locationId`.
+6. The hash chooses a noun from:
 
 ```text
-Hour 2-7 verification message: posting from the archive saves to Supabase.
+Lantern, Owl, Fox, Koala, Comet, Echo, Wombat, Maple, Orbit, Finch
 ```
 
-Why I did it:
+7. The final label is saved as `messages.author_label`.
+8. The same value is also written to the old `messages.pseudonym` field for hackathon compatibility.
+9. `author_label` is now the canonical display column.
 
-- The definition of done says submitting a message should save and appear on refresh.
+Expected behavior:
 
-What happened after:
+- Same browser + Desk 47 gets the same label.
+- Same browser + Desk 48 gets a different label because the desk prefix changes.
+- Different browser + Desk 47 usually gets a different label.
+- The user never types a username.
 
-- API returned HTTP 201.
-- Supabase saved the message.
-- `/api/health` increased from 24 to 25 messages.
-- `/desk/47` contained the posted verification message.
+## APP_SECRET Behavior
 
-Inserted verification message id:
+`APP_SECRET` is server-only.
+
+Do not use:
 
 ```text
-fad44baf-e42b-410a-b787-20859047ecd5
+NEXT_PUBLIC_APP_SECRET
 ```
 
-## Every File Changed For Hour 2-7
+In development:
+
+- If `APP_SECRET` is missing, the server uses a development-only fallback and logs a warning.
+
+In production:
+
+- If `APP_SECRET` is missing, posting returns a helpful error.
+
+Before Vercel deployment, add:
+
+```text
+APP_SECRET
+```
+
+to Vercel environment variables.
+
+## Hydration Warning Investigation
+
+The reported warning involved:
+
+```text
+bis_skin_checked="1"
+```
+
+This is usually injected by a browser extension.
+
+Current code check:
+
+- The message composer does not read `localStorage` during first render.
+- It only reads/writes `localStorage` during submit.
+- There is no `Date.now()` in first render.
+- There is no `Math.random()` in first render.
+- Date formatting happens in a server component.
+
+Next check if warning appears again:
+
+1. Open the page in Incognito with extensions disabled.
+2. If the warning disappears, it was extension-caused.
+3. If it still appears, inspect client components for browser-only reads during first render.
+
+## Files Changed
 
 ### `.env.example`
 
-What changed:
+Removed:
 
-- Added `NEXT_PUBLIC_SITE_URL`.
+- `NEXT_PUBLIC_SITE_URL`
 
-Why:
+Kept:
 
-- QR codes need to know the deployed site URL.
-
-### `lib/demoData.ts`
-
-What changed:
-
-- Added fallback message data.
-- Added `DemoMessage`.
-- Added `getDemoMessagesForLocation`.
-
-Why:
-
-- The archive should not be empty if Supabase message fetching fails.
-
-### `lib/messages.ts`
-
-What changed:
-
-- New file.
-- Fetches messages from Supabase.
-- Falls back to local demo messages if needed.
-
-Why:
-
-- Keeps message data logic out of page components.
-
-### `app/api/messages/route.ts`
-
-What changed:
-
-- New API route.
-- Saves messages to Supabase.
-
-Why:
-
-- The message form needs a backend endpoint.
-
-### `app/desk/[locationId]/message-composer.tsx`
-
-What changed:
-
-- New client component.
-- Handles textarea, submit, success, error, and refresh.
-
-Why:
-
-- Form interaction must run in the browser.
+- `NEXT_PUBLIC_SUPABASE_URL`
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+- `OPENAI_API_KEY`
+- `APP_SECRET`
 
 ### `app/desk/[locationId]/page.tsx`
 
-What changed:
+Changed:
 
-- Replaced archive shell with real archive UI.
-- Fetches location and messages.
-- Shows message cards.
-- Shows QR code.
-- Shows composer.
+- Removed QR UI.
+- Removed URL display.
+- Removed judge-visible debug labels.
+- Shows only product content.
 
-Why:
+### `app/desk/[locationId]/message-composer.tsx`
 
-- This is the core QR archive loop.
+Changed:
 
-### `app/api/health/route.ts`
+- Creates/reads `demo_user_id` from `localStorage` during submit.
+- Sends `demoUserId` to the API.
+- Disables the submit button while posting.
+- Keeps character count.
+- Shows:
 
-What changed:
+```text
+Posted — your note is now part of Desk 47.
+```
 
-- Added message health.
-- Changed checkpoint to `hours-2-7`.
+### `app/api/messages/route.ts`
 
-Why:
+Changed:
 
-- Debugging now needs to know message count and message data source.
+- Receives `demoUserId`.
+- Derives author label server-side.
+- Inserts `author_label`.
+- Also inserts `pseudonym` for backward compatibility.
+- Does not store `demoUserId`.
+
+### `lib/pseudonym.ts`
+
+New file.
+
+Purpose:
+
+- Builds stable per-location anonymous labels using Node crypto HMAC SHA-256.
+
+### `lib/author-label.ts`
+
+New file.
+
+Purpose:
+
+- Chooses the label that should appear on message cards.
+- Uses `author_label` first only when it is not `Anonymous Student`.
+- Falls back to the old `pseudonym` column if it contains a useful generated label.
+- Returns `Anonymous Student` only when neither column has a useful value.
+
+### `lib/messages.ts`
+
+Changed:
+
+- Reads all message columns with `select("*")`.
+- Uses `getDisplayAuthorLabel`.
+- Normalizes old messages by falling back to the first useful label:
+
+```text
+author_label if it is not "Anonymous Student"
+then pseudonym if it is not "Anonymous Student"
+then Anonymous Student
+```
+
+### `lib/demoData.ts`
+
+Changed:
+
+- Fallback messages now include `author_label`.
+
+### `lib/supabase/database.types.ts`
+
+Changed:
+
+- Added `author_label` to `messages`.
+
+### `supabase/schema.sql`
+
+Changed:
+
+- Added `author_label text not null default 'Anonymous Student'`.
+- Added an `alter table` statement so existing projects can add the column.
+- Added a corrected backfill from `pseudonym` to `author_label`.
+- Added a database comment marking `author_label` as the canonical display column.
+
+Backfill SQL:
+
+```sql
+update messages
+set author_label = pseudonym
+where author_label = 'Anonymous Student'
+  and pseudonym is not null
+  and pseudonym <> ''
+  and pseudonym <> 'Anonymous Student';
+```
+
+Why this matters:
+
+- Old rows may already have good labels like `Desk-47 Owl` in `pseudonym`.
+- The newer `author_label` column may still contain its default value, `Anonymous Student`.
+- This SQL copies the useful old label into the new canonical column.
+
+Important:
+
+- The repository schema is updated.
+- The live Supabase database still needs this SQL to be rerun if it was created before the cleanup.
+- Until then, the API writes the stable label to `pseudonym` as a compatibility fallback.
 
 ### `supabase/seed.sql`
 
-What changed:
+Changed:
 
-- Added seeded messages.
-
-Why:
-
-- Fresh databases need demo content.
+- Seeds remain idempotent.
+- Adds/backfills `author_label` for seeded messages.
 
 ### `README.md`
 
-What changed:
+Changed:
 
-- Updated project status for Hour 0-2 and Hour 2-7.
-- Added Hour 2-7 verification notes and file map.
+- Explains physical QR flow.
+- Documents `APP_SECRET`.
+- Removes `NEXT_PUBLIC_SITE_URL`.
+
+## Debugging Guide
+
+### If `/desk/47` shows QR or raw URL
+
+You are not on the latest code.
+
+Check:
+
+```bash
+git status
+git log --oneline -3
+```
+
+Then restart:
+
+```bash
+npm run dev
+```
+
+### If posting fails with an author label error
+
+Check:
+
+1. Run `supabase/schema.sql` in Supabase.
+2. Confirm `messages.author_label` exists.
+3. Confirm `APP_SECRET` exists for production/deployed environments.
+
+### If a new message shows `Anonymous Student`
+
+Possible reasons:
+
+1. `author_label` column is missing.
+2. Old message row has no useful `author_label` yet.
+3. The API fell back to `pseudonym` compatibility mode.
+
+Fix:
+
+1. Run `supabase/schema.sql`.
+2. Run the backfill SQL above if existing rows have good `pseudonym` values.
+3. Post a new message.
+
+### If hydration warnings mention `bis_skin_checked`
+
+Likely cause:
+
+- browser extension DOM injection
+
+Check:
+
+- Incognito with extensions disabled.
+
+## Verification Checklist
+
+Run:
+
+```bash
+npm run lint
+npm run build
+```
+
+Local checks:
+
+1. `/api/health` works.
+2. `/desk/47` loads messages.
+3. `/desk/47` does not show QR.
+4. `/desk/47` does not show raw localhost URL.
+5. Submit message works.
+6. New message shows a `Desk-47 ...` label.
+7. Refreshing does not change the same browser label.
+
+Deployed checks:
+
+1. Deployed `/desk/47` loads messages.
+2. Deployed `/desk/47` does not show QR or localhost URL.
+3. Posting works.
+4. New messages show stable anonymous author labels.
+
+## Latest Local Verification
+
+Performed after removing QR UI and adding stable labels:
+
+- `npm run lint` passed.
+- `npm run build` passed.
+- `/api/health` returned `ok: true`.
+- `/desk/47` loaded messages.
+- `/desk/47` did not contain `Desk QR`.
+- `/desk/47` did not contain `QR code`.
+- `/desk/47` did not contain `localhost`.
+- Posting two messages with the same demo user id returned the same label:
+
+```text
+Desk-47 Owl
+```
+
+- The new message appeared on refresh.
+
+Author-label migration note:
+
+```text
+Some rows may have pseudonym = "Desk-47 Owl" but author_label = "Anonymous Student".
+```
+
+That means the useful generated label exists, but it is still in the old `pseudonym` column. Run the backfill SQL in this handoff so `author_label` becomes the canonical display value. The app also has a display fallback so these rows still render with the better `pseudonym` label before the database is cleaned.
+
+## Author Label Migration Fix
+
+This section records the later bug fix where `pseudonym` had good labels but `author_label` still showed `Anonymous Student`.
+
+### What was wrong
+
+The database had two label columns:
+
+```text
+pseudonym
+author_label
+```
+
+`pseudonym` was the older column.
+
+`author_label` is the newer canonical column.
+
+Some rows looked like this:
+
+```text
+pseudonym = Desk-47 Owl
+author_label = Anonymous Student
+```
+
+That meant the useful label existed, but the app and database migration were not always using it correctly.
+
+### Step 1: I checked the POST API
+
+File:
+
+```text
+app/api/messages/route.ts
+```
+
+What I checked:
+
+- The API reads `demoUserId`.
+- The API calls the HMAC helper.
+- The helper creates labels like `Desk-47 Echo`.
+- The insert writes the generated label to both:
+  - `author_label`
+  - `pseudonym`
+
+What I changed:
+
+- The API response now returns a small debug-friendly message object with:
+  - `id`
+  - `location_id`
+  - `body`
+  - `pseudonym`
+  - `author_label`
+  - `created_at`
 
 Why:
 
-- README should match the current project state.
+- When testing in the browser Network tab, a beginner can immediately see whether `author_label` and `pseudonym` match.
 
-## Current Runtime Behavior
+### Step 2: I added a display-label helper
 
-`/desk/47`:
+File:
 
-- Fetches Desk 47 from Supabase.
-- Fetches public messages from Supabase.
-- Displays seeded messages.
-- Displays QR code.
-- Lets the user post a message.
-
-`/api/messages`:
-
-- Accepts `POST`.
-- Saves valid messages to Supabase.
-- Rejects invalid requests.
-
-`/api/health`:
-
-- Confirms Supabase is configured.
-- Confirms Desk 47 source.
-- Confirms Desk 47 message source and count.
-
-Current checked result:
-
-```json
-{
-  "ok": true,
-  "checkpoint": "hours-2-7",
-  "supabaseConfigured": true,
-  "desk47": {
-    "source": "supabase"
-  },
-  "desk47Messages": {
-    "source": "supabase",
-    "count": 25
-  }
-}
+```text
+lib/author-label.ts
 ```
 
-## Verification Performed
+What I added:
+
+```text
+getDisplayAuthorLabel(message)
+```
+
+How it decides what to show:
+
+1. If `author_label` exists and is not `Anonymous Student`, show it.
+2. Else, if `pseudonym` exists and is not `Anonymous Student`, show it.
+3. Else, show `Anonymous Student`.
+
+Why:
+
+- `Anonymous Student` is a real string, so it is truthy in JavaScript.
+- Code like `author_label || pseudonym` is wrong here because it stops at `Anonymous Student` and never reaches the better old `pseudonym`.
+
+### Step 3: I used the helper when reading and rendering messages
+
+Files:
+
+```text
+lib/messages.ts
+app/desk/[locationId]/page.tsx
+```
+
+What I changed:
+
+- `lib/messages.ts` normalizes fetched rows with `getDisplayAuthorLabel`.
+- The message card in `page.tsx` also uses `getDisplayAuthorLabel`.
+
+Why:
+
+- The server data and visible UI now agree on the same fallback rule.
+- Old rows render correctly before the database is fully backfilled.
+
+### Step 4: I fixed the SQL backfill
+
+Files:
+
+```text
+supabase/schema.sql
+supabase/seed.sql
+```
+
+What was wrong before:
+
+```sql
+set author_label = coalesce(nullif(author_label, ''), nullif(pseudonym, ''), 'Anonymous Student')
+```
+
+Why that was wrong:
+
+- `author_label` was `Anonymous Student`.
+- `Anonymous Student` is not an empty string.
+- So SQL kept `Anonymous Student` and never copied `pseudonym`.
+
+Correct SQL:
+
+```sql
+update messages
+set author_label = pseudonym
+where author_label = 'Anonymous Student'
+  and pseudonym is not null
+  and pseudonym <> ''
+  and pseudonym <> 'Anonymous Student';
+```
+
+What happens after:
+
+- Rows with `pseudonym = Desk-47 Owl` get `author_label = Desk-47 Owl`.
+- Rows where both columns are `Anonymous Student` are left unchanged.
+- Those unchanged rows are old test data and can be manually deleted before the final demo.
+
+### Step 5: I documented the migration
+
+File:
+
+```text
+README.md
+```
+
+What I added:
+
+- The exact backfill SQL.
+- A simple explanation that `author_label` is canonical.
+- A note that old all-anonymous test rows should not be deleted automatically.
+
+### Step 6: I verified the fix locally
 
 Commands:
 
@@ -469,113 +560,87 @@ npm run lint
 npm run build
 ```
 
-Both passed.
+Result:
 
-Local route checks:
+- Both passed.
 
-- `GET /api/health` passed.
-- `GET /desk/47` returned HTTP 200.
-- Page HTML contained `Archive at this desk`.
-- Page HTML contained `Desk QR`.
-- Page HTML contained the message form label.
-- Page HTML contained seeded message text.
+Local dev check:
 
-Posting check:
+```text
+http://127.0.0.1:3000/api/health
+```
 
-- `POST /api/messages` returned HTTP 201.
-- `/api/health` message count increased.
-- `/desk/47` contained the posted verification message.
+Result:
 
-## Known Issues Or Gaps
+```json
+{
+  "ok": true,
+  "checkpoint": "hours-2-7",
+  "desk47Messages": {
+    "source": "supabase",
+    "count": 29
+  }
+}
+```
 
-Vercel is still not verified.
+POST test:
 
-Why this matters:
+```text
+body = Author label migration verification: canonical author_label should match pseudonym.
+demoUserId = local-author-label-migration-check
+```
 
-- The definition of done says the phone should scan a QR and open the deployed URL.
-- Localhost cannot satisfy that.
+Response:
 
-What to do:
+```json
+{
+  "message": {
+    "pseudonym": "Desk-47 Echo",
+    "author_label": "Desk-47 Echo"
+  }
+}
+```
 
-1. Push the latest changes.
-2. Deploy to Vercel.
-3. Add Vercel env vars.
-4. Set `NEXT_PUBLIC_SITE_URL` to the deployed base URL.
-5. Open deployed `/api/health`.
-6. Scan deployed Desk 47 QR on a phone.
+Desk page check:
 
-Moderation is not built yet.
+- `/desk/47` showed the new verification message.
+- `/desk/47` showed `Desk-47 Echo`.
+- `/desk/47` did not show `Desk QR`.
+- `/desk/47` did not show `QR code`.
+- `/desk/47` did not show `localhost`.
 
-Why:
+Supabase select check:
 
-- Moderation belongs to Hours 22-25.
+```sql
+select id, location_id, pseudonym, author_label, body, created_at
+from messages
+where location_id = 47
+order by created_at desc
+limit 10;
+```
 
-Current risk:
+Important result:
 
-- The current API accepts any non-empty message up to 1000 characters.
+```text
+Newest row:
+pseudonym = Desk-47 Echo
+author_label = Desk-47 Echo
+```
 
-Onboarding and ranking are not built yet.
+Old test-data note:
 
-Why:
+```text
+One older verification row still has:
+pseudonym = Anonymous Student
+author_label = Anonymous Student
+```
 
-- They belong to later checkpoints.
+That is old test data, not the main migration bug. Do not delete it automatically.
 
-Current behavior:
+## Next Step
 
-- Messages are shown newest-first.
+Only start onboarding after:
 
-## Debugging Guide
-
-### If `/desk/47` shows no messages
-
-Check:
-
-1. Open `/api/health`.
-2. Look at `desk47Messages.count`.
-3. If count is 0, run `supabase/seed.sql` in Supabase.
-4. If source is `seed-fallback`, read `desk47Messages.error`.
-5. Confirm the `messages` table exists.
-6. Confirm RLS allows selecting public messages.
-
-### If posting fails
-
-Check:
-
-1. Browser/network response from `/api/messages`.
-2. The JSON error returned by the API.
-3. Whether `.env.local` has Supabase URL and anon key.
-4. Whether the location exists in `locations`.
-5. Whether RLS allows insert into `messages`.
-
-### If QR points to localhost on Vercel
-
-Fix:
-
-1. Add `NEXT_PUBLIC_SITE_URL` in Vercel.
-2. Set it to the deployed app URL.
-3. Redeploy.
-
-### If the app falls back to demo messages
-
-Meaning:
-
-- Supabase message fetch failed.
-
-Check:
-
-1. `/api/health`.
-2. `desk47Messages.error`.
-3. Supabase table name.
-4. RLS select policy.
-5. Env vars.
-
-## Next Checkpoint
-
-Continue to Hours 7-12: onboarding/profile.
-
-Do not start embeddings, live presence, moderation, or signed QR tokens until:
-
-- deployed Desk 47 page loads
-- QR scan opens Desk 47 on a phone
-- messages show
-- posting works
+- the cleanup above is pushed
+- Vercel has the required env vars
+- deployed `/desk/47` passes the checks

@@ -1195,7 +1195,7 @@ Do this next:
 3. Add a message form.
 4. Add `POST /api/messages`.
 5. Save messages to Supabase.
-6. Generate a QR code for the deployed Desk 47 URL.
+6. Generate Desk 47 QR code for the deployed URL.
 7. Seed at least 20 strong Desk 47 messages before demo rehearsal.
 
 Do not jump to embeddings, presence, moderation, or pseudonyms until the basic read/post archive loop works.

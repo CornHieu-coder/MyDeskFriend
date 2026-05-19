@@ -66,3 +66,10 @@ on conflict (id) do update set
   status = excluded.status,
   term_week_when_written = excluded.term_week_when_written,
   created_at = excluded.created_at;
+
+update public.messages
+set author_label = pseudonym
+where author_label = 'Anonymous Student'
+  and pseudonym is not null
+  and pseudonym <> ''
+  and pseudonym <> 'Anonymous Student';

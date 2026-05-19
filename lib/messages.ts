@@ -1,4 +1,5 @@
 import { getDemoMessagesForLocation, type DemoMessage } from "@/lib/demoData";
+import { getDisplayAuthorLabel } from "@/lib/author-label";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 export type MessageRecord = DemoMessage;
@@ -10,7 +11,7 @@ export type MessageLookupResult = {
 };
 
 const messageSelect =
-  "id,location_id,author_id,pseudonym,body,tags,course_tags,upvotes,status,term_week_when_written,created_at";
+  "*";
 
 export async function getMessagesForLocation(
   locationId: string,
@@ -53,7 +54,20 @@ export async function getMessagesForLocation(
   }
 
   return {
-    messages: data ?? [],
+    messages: (data ?? []).map(normalizeMessage),
     source: "supabase",
+  };
+}
+
+function normalizeMessage(message: MessageRecord): MessageRecord {
+  const authorLabel = getDisplayAuthorLabel(message);
+
+  return {
+    ...message,
+    author_label: authorLabel,
+    pseudonym: message.pseudonym || authorLabel,
+    tags: message.tags ?? [],
+    course_tags: message.course_tags ?? [],
+    upvotes: message.upvotes ?? 0,
   };
 }

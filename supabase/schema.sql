@@ -24,6 +24,7 @@ create table if not exists public.messages (
   id uuid primary key default gen_random_uuid(),
   location_id integer not null references public.locations(id) on delete cascade,
   author_id uuid references public.profiles(id),
+  author_label text not null default 'Anonymous Student',
   pseudonym text not null default 'Anonymous Student',
   body text not null check (char_length(body) between 1 and 1000),
   tags text[] not null default '{}',
@@ -36,6 +37,19 @@ create table if not exists public.messages (
   ),
   created_at timestamptz not null default now()
 );
+
+alter table public.messages
+  add column if not exists author_label text not null default 'Anonymous Student';
+
+comment on column public.messages.author_label is
+  'Canonical anonymous display label. Keep pseudonym during migration only.';
+
+update public.messages
+set author_label = pseudonym
+where author_label = 'Anonymous Student'
+  and pseudonym is not null
+  and pseudonym <> ''
+  and pseudonym <> 'Anonymous Student';
 
 create index if not exists messages_location_created_idx
   on public.messages(location_id, created_at desc);
