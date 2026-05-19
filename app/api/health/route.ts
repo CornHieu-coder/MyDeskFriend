@@ -12,7 +12,7 @@ export async function GET() {
   return NextResponse.json({
     ok: Boolean(desk47.location),
     app: "MyStudyFriend",
-    checkpoint: "hours-2-7",
+    checkpoint: "hours-7-12",
     supabaseConfigured: hasSupabaseConfig(),
     desk47: {
       source: desk47.source,
