@@ -1,10 +1,17 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import { getDisplayAuthorLabel } from "@/lib/author-label";
 import type { LocationRecord } from "@/lib/locations";
 import type { MessageRecord } from "@/lib/messages";
+import {
+  buildContextString,
+  getSemanticMatchLabel,
+  rankMessages,
+  type SemanticMatchThresholds,
+  type StudyProfile,
+} from "@/lib/ranking";
 import { MessageComposer } from "./message-composer";
 
 type DeskArchiveClientProps = {
@@ -17,10 +24,22 @@ type DeskArchiveClientProps = {
   };
 };
 
-type StudyProfile = {
-  profileId: string;
-  displayName: string;
-  courses: string[];
+type RankedApiMessage = MessageRecord & {
+  rankingScore: number;
+  rankingReasons: string[];
+  semantic_similarity?: number | null;
+};
+
+type DisplayedMessage = MessageRecord & {
+  rankingReasons: string[];
+  semantic_similarity?: number | null;
+};
+
+type RankedMessagesApiResult = {
+  contextString: string;
+  mode: "stage-a" | "stage-b";
+  messages: RankedApiMessage[];
+  warning?: string;
 };
 
 const profileStorageKey = "mystudyfriend_profile";
@@ -55,6 +74,8 @@ export function DeskArchiveClient({
   const [profile, setProfile] = useState<StudyProfile | null>(null);
   const [isCheckingProfile, setIsCheckingProfile] = useState(true);
   const [isEditingProfile, setIsEditingProfile] = useState(false);
+  const [apiRanking, setApiRanking] =
+    useState<RankedMessagesApiResult | null>(null);
 
   useEffect(() => {
     const profileCheck = window.setTimeout(() => {
@@ -78,6 +99,64 @@ export function DeskArchiveClient({
     setProfile(nextProfile);
     setIsEditingProfile(false);
   }
+
+  const rankedMessages = useMemo(
+    () => (profile ? rankMessages(messages, profile) : []),
+    [messages, profile],
+  );
+  const displayedMessages = apiRanking?.messages ?? rankedMessages;
+  const contextString =
+    apiRanking?.contextString ?? (profile ? buildContextString(profile) : "");
+  const rankingMode = apiRanking?.mode ?? "stage-a";
+  const semanticMatchThresholds = useMemo(
+    () => getRelativeSemanticMatchThresholds(displayedMessages, rankingMode),
+    [displayedMessages, rankingMode],
+  );
+
+  useEffect(() => {
+    if (!profile) {
+      return;
+    }
+
+    const controller = new AbortController();
+
+    Promise.resolve().then(() => {
+      if (!controller.signal.aborted) {
+        setApiRanking(null);
+      }
+    });
+
+    fetch("/api/ranked-messages", {
+      body: JSON.stringify({
+        locationId: location.id,
+        profile,
+      }),
+      headers: {
+        "Content-Type": "application/json",
+      },
+      method: "POST",
+      signal: controller.signal,
+    })
+      .then((response) => {
+        if (!response.ok) {
+          return null;
+        }
+
+        return response.json() as Promise<unknown>;
+      })
+      .then((payload) => {
+        if (!controller.signal.aborted && isRankedMessagesApiResult(payload)) {
+          setApiRanking(payload);
+        }
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) {
+          setApiRanking(null);
+        }
+      });
+
+    return () => controller.abort();
+  }, [location.id, messages, profile]);
 
   if (isCheckingProfile) {
     return (
@@ -142,30 +221,46 @@ export function DeskArchiveClient({
               {debugInfo.messageError
                 ? `; message error ${debugInfo.messageError}`
                 : ""}
+              {contextString ? `; ranking context ${contextString}` : ""}
+              {apiRanking?.warning ? `; ranking warning ${apiRanking.warning}` : ""}
             </p>
           ) : null}
         </section>
 
         <ProfileBanner
+          contextString={contextString}
           onSwitchProfile={() => setIsEditingProfile(true)}
           profile={profile}
+          rankingMode={rankingMode}
         />
 
         <section className="mt-6 grid gap-5 lg:grid-cols-[1fr_320px]">
           <div>
             <div className="mb-4">
               <p className="text-sm font-semibold text-[#8a5135]">
-                {messages.length} notes from this place
+                {displayedMessages.length} notes from this place
               </p>
               <h2 className="mt-1 text-2xl font-semibold">
                 What students left here
               </h2>
+              {rankingMode === "stage-b" ? (
+                <p className="mt-2 text-sm font-medium text-[#55615a]">
+                  Ranked by course fit, semantic similarity, timing, and desk
+                  activity.
+                </p>
+              ) : null}
             </div>
 
-            {messages.length > 0 ? (
+            {displayedMessages.length > 0 ? (
               <div className="space-y-4">
-                {messages.map((message) => (
-                  <MessageCard key={message.id} message={message} />
+                {displayedMessages.map((message, index) => (
+                  <MessageCard
+                    key={message.id}
+                    message={message}
+                    rankIndex={index}
+                    rankingMode={rankingMode}
+                    semanticMatchThresholds={semanticMatchThresholds}
+                  />
                 ))}
               </div>
             ) : (
@@ -362,16 +457,25 @@ function OnboardingPanel({
 }
 
 function ProfileBanner({
+  contextString,
   onSwitchProfile,
   profile,
+  rankingMode,
 }: {
+  contextString: string;
   onSwitchProfile: () => void;
   profile: StudyProfile;
+  rankingMode: "stage-a" | "stage-b";
 }) {
   return (
-    <section className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[#cfd8d4] bg-[#eef7f1] px-5 py-4">
+    <section
+      className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[#cfd8d4] bg-[#eef7f1] px-5 py-4"
+      title={`${contextString} (${rankingMode})`}
+    >
       <p className="font-semibold text-[#23483a]">
-        Personalised for {profile.displayName} · {profile.courses.join(" · ")}
+        Personalised for {profile.displayName}
+        {" \u00b7 "}
+        {profile.courses.join(" \u00b7 ")}
       </p>
       <button
         className="rounded-full border border-[#9ab7a5] bg-white px-4 py-2 text-sm font-semibold text-[#23483a] transition hover:border-[#1f7a5a]"
@@ -384,9 +488,25 @@ function ProfileBanner({
   );
 }
 
-function MessageCard({ message }: { message: MessageRecord }) {
+function MessageCard({
+  message,
+  rankIndex,
+  rankingMode,
+  semanticMatchThresholds,
+}: {
+  message: DisplayedMessage;
+  rankIndex: number;
+  rankingMode: "stage-a" | "stage-b";
+  semanticMatchThresholds: SemanticMatchThresholds | null;
+}) {
   const tagList = [...message.tags, ...message.course_tags];
   const authorLabel = getDisplayAuthorLabel(message);
+  const whyChips = getVisibleWhyChips(
+    message,
+    rankIndex,
+    rankingMode,
+    semanticMatchThresholds,
+  );
 
   return (
     <article className="rounded-lg border border-[#d8d2c5] bg-white p-5 shadow-sm">
@@ -409,11 +529,155 @@ function MessageCard({ message }: { message: MessageRecord }) {
           ))}
         </div>
       ) : null}
+      {whyChips.length > 0 ? (
+        <div className="mt-4 flex flex-wrap gap-2">
+          {whyChips.map((chip) => (
+            <span
+              className={`rounded-md border px-3 py-1 text-xs font-semibold ${getWhyChipClassName(
+                chip,
+              )}`}
+              key={chip}
+            >
+              {chip}
+            </span>
+          ))}
+        </div>
+      ) : null}
       <p className="mt-4 text-sm font-medium text-[#8a5135]">
         {message.upvotes} upvotes
       </p>
     </article>
   );
+}
+
+function getVisibleWhyChips(
+  message: DisplayedMessage,
+  rankIndex: number,
+  rankingMode: "stage-a" | "stage-b",
+  semanticMatchThresholds: SemanticMatchThresholds | null,
+) {
+  const baseChips = normalizeWhyChips(message.rankingReasons);
+  const semanticChip =
+    rankingMode === "stage-b" && semanticMatchThresholds
+      ? getSemanticMatchLabel(message.semantic_similarity, semanticMatchThresholds)
+      : null;
+  const fullChips = mergeWhyChips(baseChips, semanticChip);
+
+  if (rankingMode === "stage-a") {
+    return rankIndex < 3 ? fullChips.slice(0, 4) : [];
+  }
+
+  if (rankIndex < 3) {
+    return fullChips.slice(0, 4);
+  }
+
+  if (rankIndex < 8) {
+    return fullChips
+      .filter(isLimitedWhyChip)
+      .slice(0, 2);
+  }
+
+  const matchedCourseChip = fullChips.find((chip) =>
+    chip.startsWith("Matched "),
+  );
+  const strongSemanticChip = fullChips.find(
+    (chip) => chip === "Strong semantic match",
+  );
+
+  return matchedCourseChip && strongSemanticChip
+    ? [matchedCourseChip, strongSemanticChip]
+    : [];
+}
+
+function getRelativeSemanticMatchThresholds(
+  messages: DisplayedMessage[],
+  rankingMode: "stage-a" | "stage-b",
+): SemanticMatchThresholds | null {
+  if (rankingMode !== "stage-b") {
+    return null;
+  }
+
+  const similarities = messages
+    .map((message) => message.semantic_similarity)
+    .filter(
+      (similarity): similarity is number =>
+        typeof similarity === "number" && Number.isFinite(similarity),
+    )
+    .sort((first, second) => second - first);
+
+  if (similarities.length === 0) {
+    return null;
+  }
+
+  // Embedding scores are model- and dataset-dependent, and often cluster in a
+  // narrow range. Relative thresholds make the chip labels useful for each
+  // ranked response without changing the actual ranking formula.
+  return {
+    strong: similarities[Math.max(0, Math.ceil(similarities.length * 0.2) - 1)],
+    medium: similarities[Math.max(0, Math.ceil(similarities.length * 0.5) - 1)],
+  };
+}
+
+function normalizeWhyChips(reasons: string[]) {
+  return reasons.flatMap((reason) => splitWhyReason(reason)).filter(Boolean);
+}
+
+function splitWhyReason(reason: string) {
+  const [matchedReason, tagReason] = reason.split(" + ");
+
+  if (tagReason && matchedReason.startsWith("Matched ")) {
+    return [matchedReason, capitalizeChipLabel(tagReason)];
+  }
+
+  return [reason];
+}
+
+function mergeWhyChips(chips: string[], semanticChip: string | null) {
+  const mergedChips: string[] = [];
+
+  for (const chip of chips) {
+    if (!mergedChips.includes(chip)) {
+      mergedChips.push(chip);
+    }
+  }
+
+  if (semanticChip && !mergedChips.includes(semanticChip)) {
+    const firstNonCourseIndex = mergedChips.findIndex(
+      (chip) => !chip.startsWith("Matched "),
+    );
+
+    if (firstNonCourseIndex === -1) {
+      mergedChips.push(semanticChip);
+    } else {
+      mergedChips.splice(firstNonCourseIndex, 0, semanticChip);
+    }
+  }
+
+  return mergedChips;
+}
+
+function isLimitedWhyChip(chip: string) {
+  return (
+    chip === "Strong semantic match" ||
+    chip === "Medium semantic match" ||
+    chip.startsWith("Matched ")
+  );
+}
+
+function getWhyChipClassName(chip: string) {
+  if (chip.includes("semantic")) {
+    return "border-[#b8d4e8] bg-[#eef7ff] text-[#24506d]";
+  }
+
+  if (chip.startsWith("Matched ")) {
+    return "border-[#bfd8ca] bg-[#eef7f1] text-[#23483a]";
+  }
+
+  return "border-[#e1cfa7] bg-[#fff8e8] text-[#8a5135]";
+}
+
+function capitalizeChipLabel(label: string) {
+  return label.charAt(0).toUpperCase() + label.slice(1);
 }
 
 function InfoCell({ label, value }: { label: string; value: string }) {
@@ -460,4 +724,38 @@ function parseStoredProfile(value: string | null): StudyProfile | null {
   } catch {
     return null;
   }
+}
+
+function isRankedMessagesApiResult(
+  payload: unknown,
+): payload is RankedMessagesApiResult {
+  if (!payload || typeof payload !== "object") {
+    return false;
+  }
+
+  const maybePayload = payload as Partial<RankedMessagesApiResult>;
+
+  return (
+    typeof maybePayload.contextString === "string" &&
+    (maybePayload.mode === "stage-a" || maybePayload.mode === "stage-b") &&
+    Array.isArray(maybePayload.messages) &&
+    maybePayload.messages.every(isRankedApiMessage)
+  );
+}
+
+function isRankedApiMessage(message: unknown): message is RankedApiMessage {
+  if (!message || typeof message !== "object") {
+    return false;
+  }
+
+  const maybeMessage = message as Partial<RankedApiMessage>;
+
+  return (
+    typeof maybeMessage.id === "string" &&
+    typeof maybeMessage.body === "string" &&
+    Array.isArray(maybeMessage.tags) &&
+    Array.isArray(maybeMessage.course_tags) &&
+    typeof maybeMessage.rankingScore === "number" &&
+    Array.isArray(maybeMessage.rankingReasons)
+  );
 }
