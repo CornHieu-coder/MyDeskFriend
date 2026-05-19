@@ -6,6 +6,7 @@ import type { LocationLookupResult } from "@/lib/locations";
 
 type HomeContentProps = {
   desk47: LocationLookupResult;
+  desk47ScanUrl: string;
 };
 
 const ACCENT = "#F0B49A";
@@ -158,7 +159,7 @@ function ModeToggle({
   );
 }
 
-export function HomeContent({ desk47 }: HomeContentProps) {
+export function HomeContent({ desk47, desk47ScanUrl }: HomeContentProps) {
   const [showStatus, setShowStatus] = useState(false);
   const isSupabaseConnected = desk47.source === "supabase";
 
@@ -177,7 +178,7 @@ export function HomeContent({ desk47 }: HomeContentProps) {
             </div>
             <ModeToggle showStatus={showStatus} onToggle={setShowStatus} dark={false} />
           </header>
-          <StatusView desk47={desk47} isSupabaseConnected={isSupabaseConnected} />
+          <StatusView desk47={desk47} desk47ScanUrl={desk47ScanUrl} isSupabaseConnected={isSupabaseConnected} />
         </div>
       </main>
     );
@@ -546,9 +547,11 @@ export function HomeContent({ desk47 }: HomeContentProps) {
 
 function StatusView({
   desk47,
+  desk47ScanUrl,
   isSupabaseConnected,
 }: {
   desk47: LocationLookupResult;
+  desk47ScanUrl: string;
   isSupabaseConnected: boolean;
 }) {
   return (
@@ -612,7 +615,7 @@ function StatusView({
         <div className="mt-8 flex flex-wrap gap-3">
           <Link
             className="rounded-full bg-white px-5 py-3 text-sm font-semibold text-[#22352d] transition hover:bg-[#eef5f0]"
-            href="/desk/47"
+            href={desk47ScanUrl}
           >
             Open Desk 47
           </Link>

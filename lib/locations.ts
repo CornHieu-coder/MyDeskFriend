@@ -1,4 +1,4 @@
-import { getDemoLocationById } from "@/lib/demoData";
+import { demoLocations, getDemoLocationById } from "@/lib/demoData";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 export type LocationRecord = {
@@ -68,4 +68,39 @@ export async function getLocationById(
     location: data,
     source: "supabase",
   };
+}
+
+export async function getLocationBySlug(
+  slug: string,
+): Promise<LocationLookupResult> {
+  const fallback = demoLocations.find((l) => l.qr_slug === slug) ?? null;
+  const supabase = createServerSupabaseClient();
+
+  if (!supabase) {
+    return {
+      location: fallback,
+      source: "seed-fallback",
+      error: "Supabase env vars are not configured.",
+    };
+  }
+
+  const { data, error } = await supabase
+    .from("locations")
+    .select(locationSelect)
+    .eq("qr_slug", slug)
+    .maybeSingle();
+
+  if (error) {
+    return { location: fallback, source: "seed-fallback", error: error.message };
+  }
+
+  if (!data) {
+    return {
+      location: fallback,
+      source: "seed-fallback",
+      error: "Location was not found in Supabase.",
+    };
+  }
+
+  return { location: data, source: "supabase" };
 }
