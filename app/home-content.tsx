@@ -487,7 +487,7 @@ export function HomeContent({ desk47 }: HomeContentProps) {
             >
               Quiet encouragement, hard-won shortcuts, and real advice from students who&apos;ve
               taken the exact course you&apos;re taking now. Read a few before your next study
-              session — someone has already been where you are.
+              session, and take comfort in knowing others have already been where you are.
             </p>
           </div>
 
@@ -534,8 +534,8 @@ export function HomeContent({ desk47 }: HomeContentProps) {
                 margin: 0,
               }}
             >
-              Write the note you wish someone had left for you. One sentence is enough. The smaller,
-              the truer — anonymous by default, you decide who gets credit.
+              Write the note you wish someone had left for you. One sentence is enough, and all
+              messages are anonymous.
             </p>
           </div>
         </div>
