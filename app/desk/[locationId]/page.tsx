@@ -11,8 +11,6 @@ type DeskPageProps = {
   }>;
 };
 
-const showDebugInfo = process.env.NODE_ENV === "development";
-
 export default async function DeskPage({ params }: DeskPageProps) {
   const { locationId } = await params;
   const [result, messageResult] = await Promise.all([
@@ -26,15 +24,6 @@ export default async function DeskPage({ params }: DeskPageProps) {
 
   return (
     <DeskArchiveClient
-      debugInfo={
-        showDebugInfo
-          ? {
-              locationSource: result.source,
-              messageError: messageResult.error,
-              messageSource: messageResult.source,
-            }
-          : undefined
-      }
       location={result.location}
       messages={messageResult.messages}
     />
